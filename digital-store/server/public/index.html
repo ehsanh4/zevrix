@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>پنل مدیریت — ZEVRIX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ============ LOGIN ============ -->
+    <div id="loginScreen" class="login-screen">
+      <div class="login-card">
+        <div class="login-logo">
+          <svg viewBox="0 0 32 32" width="44" height="44" fill="none">
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#lg)"/>
+            <path d="M10 12h12M10 16h8M10 20h10" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+            <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
+              <stop stop-color="#6d5dfc"/><stop offset="1" stop-color="#00d4ff"/>
+            </linearGradient></defs>
+          </svg>
+        </div>
+        <h1>پنل مدیریت ZEVRIX</h1>
+        <p class="login-sub">برای ورود نام کاربری و رمز عبور خود را وارد کنید</p>
+
+        <form id="loginForm">
+          <div class="field">
+            <label>نام کاربری</label>
+            <input type="text" id="liUser" placeholder="admin" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label>رمز عبور</label>
+            <input type="password" id="liPass" placeholder="••••••••" autocomplete="current-password" required />
+          </div>
+          <div id="loginError" class="login-error"></div>
+          <button type="submit" class="btn btn-primary btn-block">ورود به پنل</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ============ DASHBOARD ============ -->
+    <div id="panel" class="panel hidden">
+      <!-- Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="side-brand">
+          <svg viewBox="0 0 32 32" width="34" height="34" fill="none">
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#lg2)"/>
+            <path d="M10 12h12M10 16h8M10 20h10" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+            <defs><linearGradient id="lg2" x1="0" y1="0" x2="32" y2="32">
+              <stop stop-color="#6d5dfc"/><stop offset="1" stop-color="#00d4ff"/>
+            </linearGradient></defs>
+          </svg>
+          <span>ZEVRIX</span>
+        </div>
+
+        <nav class="side-nav">
+          <button class="side-link active" data-view="dashboard">
+            <span class="side-ico">▦</span> داشبورد
+          </button>
+          <button class="side-link" data-view="products">
+            <span class="side-ico">▦</span> محصولات
+          </button>
+          <button class="side-link" data-view="orders">
+            <span class="side-ico">▦</span> سفارش‌ها
+            <span class="badge-count" id="ordersBadge"></span>
+          </button>
+          <button class="side-link" data-view="settings">
+            <span class="side-ico">▦</span> تنظیمات
+          </button>
+        </nav>
+
+        <div class="side-foot">
+          <button class="btn-ghost" id="viewSiteBtn">👁 مشاهده فروشگاه</button>
+          <button class="btn-ghost danger" id="logoutBtn">خروج از پنل</button>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main">
+        <header class="topbar">
+          <button class="hamburger" id="menuBtn">☰</button>
+          <h2 id="pageTitle">داشبورد</h2>
+          <div class="topbar-left">
+            <span class="admin-chip" id="adminChip"></span>
+          </div>
+        </header>
+
+        <div class="content" id="content"></div>
+      </main>
+    </div>
+  </div>
+
+  <div id="toastWrap" class="toast-wrap"></div>
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

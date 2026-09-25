@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Database (contains real data + admin hash — backup separately)
+digital-store/server/src/data/*.db
+digital-store/server/src/data/*.db-wal
+digital-store/server/src/data/*.db-shm
+digital-store/server/data/*.db
+digital-store/server/data/*.db-wal
+digital-store/server/data/*.db-shm
+
+# Uploads (user-generated)
+digital-store/server/public/uploads/
+!digital-store/server/public/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build output
+dist/
+build/
+
+# Reference / scratch projects (not part of the store)
+mainframe/
