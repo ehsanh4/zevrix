@@ -784,6 +784,34 @@
     let seeking = false;
     let typed = false;
 
+    /* The <video> has landscape + portrait <source> elements. Browsers pick
+       the right one on first load, but do NOT re-evaluate when the device
+       rotates — force a reload of the matching source on orientation change. */
+    const portraitMQ = window.matchMedia("(orientation: portrait)");
+    function pickSource() {
+      const wantPortrait = portraitMQ.matches;
+      const sources = [...video.querySelectorAll("source")];
+      const match = sources.find((s) =>
+        wantPortrait ? s.media.includes("portrait") : s.media.includes("landscape")
+      );
+      if (match && video.currentSrc !== match.src) {
+        const wasPlaying = !video.paused;
+        for (const s of sources) video.removeChild(s);
+        video.src = match.src;
+        video.load();
+        video.addEventListener(
+          "canplay",
+          function once() {
+            video.removeEventListener("canplay", once);
+            if (wasPlaying) video.play().catch(() => {});
+          }
+        );
+      }
+    }
+    pickSource(); // correct the browser's initial pick if it got it wrong
+    if (portraitMQ.addEventListener) portraitMQ.addEventListener("change", pickSource);
+    else if (portraitMQ.addListener) portraitMQ.addListener(pickSource);
+
     /* pills appear 400ms after load (independent of typing) */
     setTimeout(() => pills.classList.add("show"), 400);
 
