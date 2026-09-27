@@ -664,6 +664,25 @@ async function renderSettings() {
         <div class="s-label"><b>داده‌ها</b><span>محصولات و دسته‌ها از دیتابیس بارگذاری می‌شوند</span></div>
         <span class="pill ok">SQLite ✓</span>
       </div>
+      <div class="set-item">
+        <div class="s-label"><b>لوگوی فروشگاه</b><span>لوگوی هدر و فوتر سایت را تغییر دهید (حداکثر ۴ مگابایت — PNG/JPG/WebP/SVG)</span></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="logo-preview" id="logoPreview">
+            <svg viewBox="0 0 32 32" width="100%" height="100%" fill="none">
+              <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#lp)"/>
+              <path d="M10 12.5 16 9l6 3.5v7L16 23l-6-3.5v-7Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M10 12.5 16 16l6-3.5M16 16v7" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+              <defs><linearGradient id="lp" x1="2" y1="2" x2="30" y2="30"><stop stop-color="#6d5dfc"/><stop offset="1" stop-color="#00d4ff"/></linearGradient></defs>
+            </svg>
+            <img alt="لوگوی فعلی" />
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="hidden" />
+            <button class="btn btn-ghost btn-sm" id="logoPick">📁 انتخاب فایل</button>
+            <button class="btn btn-ghost btn-sm danger" id="logoRemove">حذف لوگو</button>
+          </div>
+        </div>
+      </div>
       <div style="display:flex;gap:10px;margin-top:18px">
         <button class="btn btn-primary" id="savePass">ذخیره رمز عبور</button>
       </div>
@@ -675,6 +694,49 @@ async function renderSettings() {
   } catch { /* ignore */ }
 
   $("#openSite").addEventListener("click", () => window.open("/", "_blank"));
+
+  /* ---- Logo upload ---- */
+  const logoPreview = $("#logoPreview");
+  const logoImg = logoPreview ? logoPreview.querySelector("img") : null;
+
+  async function loadCurrentLogo() {
+    try {
+      const b = await api("/api/branding");
+      if (b.logoUrl && logoImg) {
+        logoImg.src = b.logoUrl;
+        logoImg.style.display = "block";
+        logoPreview.classList.add("has-img");
+      }
+    } catch { /* ignore */ }
+  }
+  loadCurrentLogo();
+
+  $("#logoPick").addEventListener("click", () => $("#logoFile").click());
+  $("#logoFile").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("logo", file);
+    try {
+      const res = await api("/api/admin/branding/logo", { method: "POST", body: fd, isForm: true });
+      toast("لوگو با موفقیت تغییر کرد ✓");
+      if (logoImg) {
+        logoImg.src = res.url;
+        logoImg.style.display = "block";
+        logoPreview.classList.add("has-img");
+      }
+    } catch (err) { toast(err.message, true); }
+    e.target.value = "";
+  });
+  $("#logoRemove").addEventListener("click", async () => {
+    try {
+      await api("/api/admin/branding/logo", { method: "DELETE" });
+      toast("لوگو حذف شد — به حالت پیش‌فرض برگشت ✓");
+      if (logoImg) logoImg.style.display = "none";
+      logoPreview.classList.remove("has-img");
+    } catch (err) { toast(err.message, true); }
+  });
+
   $("#savePass").addEventListener("click", async () => {
     const pass = $("#setNewPass").value;
     if (!pass || pass.length < 6) return toast("رمز عبور باید حداقل ۶ کاراکتر باشد", true);

@@ -557,15 +557,32 @@
   /* ---------- Load data from backend (falls back to static data.js) ---------- */
   async function loadData() {
     try {
-      const [cats, prods] = await Promise.all([
+      const [cats, prods, brand] = await Promise.all([
         fetch("/api/categories").then((r) => r.json()),
-        fetch("/api/products").then((r) => r.json())
+        fetch("/api/products").then((r) => r.json()),
+        fetch("/api/branding").then((r) => r.json())
       ]);
       if (Array.isArray(cats) && cats.length) CATEGORIES = cats;
       if (Array.isArray(prods) && prods.length) PRODUCTS = prods;
+      if (brand && brand.logoUrl) applyLogo(brand.logoUrl);
     } catch (e) {
       /* offline / static file → keep using data.js */
     }
+  }
+
+  /* ---------- Apply custom logo from admin panel ---------- */
+  function applyLogo(url) {
+    if (!url) return;
+    $$(".logo__mark").forEach((mark) => {
+      let img = mark.querySelector("img");
+      if (!img) {
+        img = document.createElement("img");
+        img.alt = "ZEVRIX";
+        mark.appendChild(img);
+      }
+      img.src = url;
+      mark.classList.add("has-img");
+    });
   }
 
   /* ---------- Init ---------- */

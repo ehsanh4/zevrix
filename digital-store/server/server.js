@@ -212,6 +212,50 @@ app.post("/api/admin/upload", requireAuth, upload.single("image"), (req, res) =>
   res.json({ ok: true, url: "/uploads/" + req.file.filename });
 });
 
+/* ---------- Branding (logo) ---------- */
+const logoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".png";
+      cb(null, "logo" + ext);
+    }
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|jpe?g|webp|gif|svg)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error("فقط فایل تصویری مجاز است"));
+  }
+});
+
+/* Public: current branding */
+app.get("/api/branding", (req, res) => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'logo_url'").get();
+  res.json({ logoUrl: row ? row.value : null });
+});
+
+/* Admin: upload logo (replaces previous) */
+app.post("/api/admin/branding/logo", requireAuth, logoUpload.single("logo"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "فایلی ارسال نشده است" });
+  const url = "/uploads/" + req.file.filename;
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('logo_url', ?) " +
+      "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+  ).run(url);
+  res.json({ ok: true, url });
+});
+
+/* Admin: remove logo (back to default) */
+app.delete("/api/admin/branding/logo", requireAuth, (req, res) => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'logo_url'").get();
+  if (row && row.value) {
+    const f = path.join(UPLOADS_DIR, path.basename(row.value));
+    fs.existsSync(f) && fs.rmSync(f, { force: true });
+    db.prepare("DELETE FROM settings WHERE key = 'logo_url'").run();
+  }
+  res.json({ ok: true });
+});
+
 /* ============================================================
    ADMIN — ORDERS
    ============================================================ */
