@@ -380,6 +380,7 @@ html[dir="rtl"] .btn--details svg{transform:scaleX(-1) !important}
 .best{
   display:flex;gap:16px;align-items:center;padding:18px;border-radius:var(--radius);
   background:var(--surface);border:1px solid var(--line);transition:.3s var(--ease);text-align:start;width:100%;
+  min-width:0; /* allow grid children to shrink below content width (prevents mobile overflow) */
 }
 .best:hover{transform:translateY(-4px);border-color:var(--line-2);box-shadow:var(--shadow);background:var(--surface-2)}
 .best__rank{
