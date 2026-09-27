@@ -718,7 +718,6 @@ html[dir="ltr"] .drawer{inset-inline-end:0;transform:translateX(100%)}
   position:fixed;inset:0;width:100%;height:100%;z-index:0;
   object-fit:cover;object-position:50% center;
   pointer-events:none;
-  will-change:transform;
 }
 /* Portrait screens: the 16:9 robot video loses ~74% of its width under
    object-fit: cover. Switch to contain + a mask fade so the whole robot

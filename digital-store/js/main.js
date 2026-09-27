@@ -776,9 +776,6 @@
 
     const SENSITIVITY = 0.25;
     const REANCHOR_MS = 600;       // ms of mouse inactivity after which scrubbing re-anchors
-    const PARALLAX = 46;          // max px the video drifts vertically
-    const PARALLAX_X = 26;        // max px the video drifts horizontally
-    const PARALLAX_SCALE = 1.16;  // oversized so drift never exposes edges
     const TYPE_SPEED = 38;
     const TYPE_DELAY = 600;
     let targetTime = 0;
@@ -786,7 +783,6 @@
     let lastMove = 0;
     let seeking = false;
     let typed = false;
-    let parallaxFrame = 0;
 
     /* pills appear 400ms after load (independent of typing) */
     setTimeout(() => pills.classList.add("show"), 400);
@@ -845,19 +841,8 @@
     window.addEventListener("pointerdown", ensurePlaying);
     window.addEventListener("keydown", ensurePlaying);
 
-    /* parallax drift: mouse position nudges the video, so the character
-       appears to move up/down (and left/right) inside the frame */
-    function applyParallax(mx, my) {
-      cancelAnimationFrame(parallaxFrame);
-      parallaxFrame = requestAnimationFrame(() => {
-        const nx = (mx / window.innerWidth) * 2 - 1;   // -1 … 1
-        const ny = (my / window.innerHeight) * 2 - 1;  // -1 … 1
-        const ty = ny * PARALLAX;
-        const tx = nx * PARALLAX_X;
-        video.style.transform =
-          "translate3d(" + tx.toFixed(2) + "px," + ty.toFixed(2) + "px,0) scale(" + PARALLAX_SCALE + ")";
-      });
-    }
+    /* parallax drift removed: the robot video is full-frame, so nudging it
+       vertically only pushed the robot's head under the fixed header. */
 
     window.addEventListener("mousemove", (e) => {
       if (!video.duration || !isFinite(video.duration)) return;
@@ -869,14 +854,12 @@
         prevX = e.clientX;
         lastMove = now;
         targetTime = video.currentTime;
-        applyParallax(e.clientX, e.clientY);
         return;
       }
 
       const dx = e.clientX - prevX;
       prevX = e.clientX;
       lastMove = now;
-      applyParallax(e.clientX, e.clientY);
       if (dx === 0) return;
 
       const offset = (dx / window.innerWidth) * SENSITIVITY * video.duration;
