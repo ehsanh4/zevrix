@@ -597,11 +597,8 @@
 
   /* ---------- Init ---------- */
   async function init() {
-    console.log("[ZEVRIX-DBG] init started, readyState:", document.readyState);
     await loadData();
-    console.log("[ZEVRIX-DBG] loadData done, CATEGORIES:", CATEGORIES.length, "PRODUCTS:", PRODUCTS.length);
     renderAll();
-    console.log("[ZEVRIX-DBG] renderAll done");
     animateCounters();
     onScroll();
 
