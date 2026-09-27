@@ -35,10 +35,21 @@ if [ "$NODE_OK" = false ]; then
   echo "⬇  Installing Node.js 22 (current: $(node -v 2>/dev/null || echo none))..."
   # remove ancient distro node if present
   apt remove -y -qq nodejs 2>/dev/null || true
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
-  apt install -y -qq nodejs >/dev/null
+  apt autoremove -y -qq 2>/dev/null || true
+  if curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1; then
+    apt install -y -qq nodejs >/dev/null
+  else
+    # fallback: official Node.js 22 binary
+    echo "   nodesource failed, using official binary..."
+    ARCH=$(dpkg --print-architecture)
+    [ "$ARCH" = "amd64" ] && ARCH=x64
+    curl -fsSL "https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-$ARCH.tar.xz" -o /tmp/node.tar.xz
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+    rm -f /tmp/node.tar.xz
+  fi
   # make sure new node/npm win over any stale ones
   hash -r
+  export PATH="/usr/local/bin:$PATH"
 fi
 echo "   Node $(node -v)  |  npm $(npm -v)"
 
@@ -60,7 +71,7 @@ mkdir -p "$(dirname "$APP_DIR")"
 if [ -d "$APP_DIR/.git" ]; then
   cd "$APP_DIR" && git pull -q
 else
-  git clone -q https://github.com/ehsanh4094/zevrix.git "$APP_DIR"
+  git clone -q https://github.com/ehsanh4/zevrix.git "$APP_DIR"
   cd "$APP_DIR"
 fi
 
@@ -116,7 +127,7 @@ cat > /usr/local/bin/zevrix-backup <<'EOF'
 #!/usr/bin/env bash
 ts=$(date +%Y%m%d-%H%M%S)
 mkdir -p /var/backups/zevrix
-cp /var/www/zevrix/digital-store/server/data/store.db "/var/backups/zevrix/store-$ts.db"
+cp /var/www/zevrix/digital-store/server/src/data/store.db "/var/backups/zevrix/store-$ts.db"
 find /var/backups/zevrix -name 'store-*.db' -mtime +14 -delete
 EOF
 chmod +x /usr/local/bin/zevrix-backup
