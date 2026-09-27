@@ -68,9 +68,12 @@
     const grid = $("#categoriesGrid");
     grid.innerHTML = CATEGORIES.map((c) => {
       const count = PRODUCTS.filter((p) => p.cat === c.id).length;
+      const g = (c.gradient && c.gradient.length === 2)
+        ? c.gradient
+        : [c.color || "#6d5dfc", "#00d4ff"];
       return `
       <button class="cat-card reveal" data-cat="${c.id}"
-        style="--cat-color:${c.color};--cat-grad:linear-gradient(135deg,${c.gradient[0]},${c.gradient[1]})">
+        style="--cat-color:${c.color};--cat-grad:linear-gradient(135deg,${g[0]},${g[1]})">
         <span class="cat-card__icon">${c.icon}</span>
         <h3>${t("cat." + c.id)}</h3>
         <p>${count}+ ${t("categories.count")}</p>
