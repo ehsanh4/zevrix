@@ -774,7 +774,8 @@
     const copyBtn = $("#ariaCopy");
     if (!video || !typeEl || !pills) return;
 
-    const SENSITIVITY = 0.8;
+    const SENSITIVITY = 0.25;
+    const REANCHOR_MS = 600;       // ms of mouse inactivity after which scrubbing re-anchors
     const PARALLAX = 46;          // max px the video drifts vertically
     const PARALLAX_X = 26;        // max px the video drifts horizontally
     const PARALLAX_SCALE = 1.16;  // oversized so drift never exposes edges
@@ -782,7 +783,7 @@
     const TYPE_DELAY = 600;
     let targetTime = 0;
     let prevX = null;
-    let prevY = null;
+    let lastMove = 0;
     let seeking = false;
     let typed = false;
     let parallaxFrame = 0;
@@ -832,6 +833,18 @@
       seeking = false;
       if (Math.abs(targetTime - video.currentTime) > 0.05) seekTo(targetTime);
     });
+
+    /* mobile autoplay: browsers block play() until the first user gesture */
+    function ensurePlaying() {
+      if (video.paused) {
+        video.play().catch(function () { /* still blocked - retry next gesture */ });
+      }
+      window.removeEventListener("pointerdown", ensurePlaying);
+      window.removeEventListener("keydown", ensurePlaying);
+    }
+    window.addEventListener("pointerdown", ensurePlaying);
+    window.addEventListener("keydown", ensurePlaying);
+
     /* parallax drift: mouse position nudges the video, so the character
        appears to move up/down (and left/right) inside the frame */
     function applyParallax(mx, my) {
@@ -848,32 +861,35 @@
 
     window.addEventListener("mousemove", (e) => {
       if (!video.duration || !isFinite(video.duration)) return;
-      if (prevX === null || prevY === null) {
+      const now = performance.now();
+
+      // If the mouse has been idle, re-anchor to the live playhead so the
+      // first drag movement is relative to what's actually on screen.
+      if (prevX === null || now - lastMove > REANCHOR_MS) {
         prevX = e.clientX;
-        prevY = e.clientY;
+        lastMove = now;
+        targetTime = video.currentTime;
         applyParallax(e.clientX, e.clientY);
         return;
       }
-      // horizontal scrub (left/right → time)
+
       const dx = e.clientX - prevX;
-      // vertical scrub (up/down → time, same direction as horizontal)
-      const dy = e.clientY - prevY;
       prevX = e.clientX;
-      prevY = e.clientY;
-      if (dx === 0 && dy === 0) {
-        applyParallax(e.clientX, e.clientY);
-        return;
-      }
-      const offset =
-        ((dx / window.innerWidth) + (dy / window.innerHeight)) *
-        SENSITIVITY *
-        video.duration;
-      targetTime = Math.min(Math.max(targetTime + offset, 0), video.duration);
-      if (!seeking) seekTo(targetTime);
+      lastMove = now;
       applyParallax(e.clientX, e.clientY);
+      if (dx === 0) return;
+
+      const offset = (dx / window.innerWidth) * SENSITIVITY * video.duration;
+      // Wrap around so scrubbing past either end continues from the other
+      // side instead of clamping to a dead stop.
+      const d = video.duration;
+      let clamped = targetTime + offset;
+      if (d > 0) clamped = ((clamped % d) + d) % d;
+      targetTime = clamped;
+      if (!seeking) seekTo(clamped);
     });
-    window.addEventListener("blur", () => { prevX = null; prevY = null; });
-    document.addEventListener("mouseleave", () => { prevX = null; prevY = null; });
+    window.addEventListener("blur", () => { prevX = null; });
+    document.addEventListener("mouseleave", () => { prevX = null; });
 
     /* copy email */
     if (copyBtn) {
