@@ -118,7 +118,7 @@ html[dir="rtl"] .btn svg{transform:scaleX(-1)}
 .logo__mark{width:34px;height:34px;filter:drop-shadow(0 4px 12px rgba(109,93,252,.5))}
 .logo__mark svg{width:100%;height:100%}
 .logo__mark.has-img svg{display:none}
-.logo__mark.has-img img{width:100%;height:100%;object-fit:contain;border-radius:8px}
+.logo__mark.has-img img{display:block;width:100%;height:100%;object-fit:contain;border-radius:8px}
 .logo__mark img{display:none}
 .logo__text{font-size:19px;font-weight:800;letter-spacing:-.3px}
 .logo__text span{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}

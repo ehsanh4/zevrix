@@ -562,8 +562,15 @@
         fetch("/api/products").then((r) => r.json()),
         fetch("/api/branding").then((r) => r.json())
       ]);
-      if (Array.isArray(cats) && cats.length) CATEGORIES = cats;
-      if (Array.isArray(prods) && prods.length) PRODUCTS = prods;
+      /* CATEGORIES/PRODUCTS are `const` in data.js → mutate in place */
+      if (Array.isArray(cats) && cats.length) {
+        CATEGORIES.length = 0;
+        cats.forEach((c) => CATEGORIES.push(c));
+      }
+      if (Array.isArray(prods) && prods.length) {
+        PRODUCTS.length = 0;
+        prods.forEach((p) => PRODUCTS.push(p));
+      }
       if (brand && brand.logoUrl) applyLogo(brand.logoUrl);
     } catch (e) {
       /* offline / static file → keep using data.js */
