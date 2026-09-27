@@ -18,7 +18,9 @@ digital-store/server/data/*.db-shm
 
 # Uploads (user-generated)
 digital-store/server/public/uploads/
+digital-store/server/src/public/uploads/
 !digital-store/server/public/uploads/.gitkeep
+!digital-store/server/src/public/uploads/.gitkeep
 
 # Logs
 *.log
