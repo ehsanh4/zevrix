@@ -118,8 +118,17 @@ nginx -t && systemctl reload nginx
 
 # ---------- 7. Free SSL (Let's Encrypt) ----------
 echo "🔒 Issuing SSL certificate..."
-certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos \
-        --redirect --email ehsanh4094@gmail.com || echo "⚠  Certbot failed — check DNS A record"
+if certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos \
+        --redirect --email ehsanh4094@gmail.com; then
+  echo "✅ SSL issued"
+else
+  echo ""
+  echo "⚠  SSL not issued yet — your site is live on HTTP and will auto-retry."
+  echo "   Most common cause: DNS A record not pointing to this server yet."
+  echo "   Server IP: $(curl -s4 ifconfig.me 2>/dev/null || echo unknown)"
+  echo ""
+  echo "   After DNS propagates, just re-run this script to enable HTTPS."
+fi
 
 # ---------- 8. Daily DB backup ----------
 echo "💾 Scheduling daily DB backup..."
@@ -131,16 +140,33 @@ cp /var/www/zevrix/digital-store/server/src/data/store.db "/var/backups/zevrix/s
 find /var/backups/zevrix -name 'store-*.db' -mtime +14 -delete
 EOF
 chmod +x /usr/local/bin/zevrix-backup
-( crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/zevrix-backup" ) \
-  | sort -u | crontab -
+# build crontab without dying when none exists yet
+CRON_LINE="0 3 * * * /usr/local/bin/zevrix-backup"
+( crontab -l 2>/dev/null | grep -vF "$CRON_LINE"; echo "$CRON_LINE" ) \
+  | crontab -
 
 # ---------- Done ----------
 echo ""
 echo "──────────────────────────────────────────"
 echo "✅  ZEVRIX is live!"
 echo ""
-echo "   🏪 Storefront : https://$DOMAIN"
-echo "   🔐 Admin panel: https://$DOMAIN/admin"
+
+# verify the app actually answers
+if curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/" | grep -q 200; then
+  echo "   ✓ App responds on port $PORT"
+else
+  echo "   ✗ App NOT responding on port $PORT — run: pm2 logs zevrix"
+fi
+
+if curl -s -o /dev/null -w '%{http_code}' "http://$DOMAIN/" | grep -q 200; then
+  echo "   ✓ Nginx serves http://$DOMAIN"
+else
+  echo "   ✗ Nginx not serving $DOMAIN yet — check: nginx -t"
+fi
+
+echo ""
+echo "   🏪 Storefront : http://$DOMAIN"
+echo "   🔐 Admin panel: http://$DOMAIN/admin"
 echo "   👤 Login      : admin / admin12345"
 echo ""
 echo "   Logs    : pm2 logs zevrix"
