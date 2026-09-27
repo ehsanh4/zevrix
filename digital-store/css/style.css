@@ -719,15 +719,11 @@ html[dir="ltr"] .drawer{inset-inline-end:0;transform:translateX(100%)}
   object-fit:cover;object-position:50% center;
   pointer-events:none;
 }
-/* Portrait screens: the 16:9 robot video loses ~74% of its width under
-   object-fit: cover. Switch to contain + a mask fade so the whole robot
-   stays visible on phones. */
+/* Portrait phones load robot-portrait.mp4 (a 9:16 crop centered on the
+   robot), so it fills the screen natively — no contain/mask needed. */
 @media (orientation: portrait){
   .aria-hero__video{
-    object-fit:contain !important;
-    object-position:center 78% !important;
-    -webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 42%,#000 100%);
-    mask-image:linear-gradient(to bottom,transparent 0%,#000 42%,#000 100%);
+    object-fit:cover;object-position:center center;
   }
 }
 .aria-hero__scrim{

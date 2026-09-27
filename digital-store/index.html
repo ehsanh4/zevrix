@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="css/style.css?v=4" />
+  <link rel="stylesheet" href="css/style.css?v=5" />
 </head>
 <body>
 
@@ -105,8 +105,11 @@
 
   <!-- ===================== A.R.I.A HERO ===================== -->
   <section class="aria-hero" id="hero">
-    <video class="aria-hero__video" id="ariaVideo" muted autoplay loop playsinline preload="auto"
-      src="/robot.mp4"></video>
+    <!-- landscape (desktop/tablet) and portrait (phone) sources -->
+    <video class="aria-hero__video" id="ariaVideo" muted autoplay loop playsinline preload="auto">
+      <source src="/robot.mp4" media="(orientation: landscape)" />
+      <source src="/robot-portrait.mp4" media="(orientation: portrait)" />
+    </video>
     <div class="aria-hero__scrim" aria-hidden="true"></div>
 
     <div class="aria-hero__inner">
@@ -443,6 +446,6 @@
 
   <script src="js/data.js"></script>
   <script src="js/i18n.js"></script>
-  <script src="js/main.js?v=4"></script>
+  <script src="js/main.js?v=5"></script>
 </body>
 </html>
