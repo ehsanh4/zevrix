@@ -5,6 +5,7 @@
 #  (run as root on a fresh Ubuntu 22.04/24.04 VPS)
 # ============================================================
 set -euo pipefail
+trap 'echo ""; echo "❌  Deploy failed at line $LINENO — copy this output and report it." ' ERR
 
 DOMAIN="${1:-}"
 if [ -z "$DOMAIN" ]; then
@@ -23,18 +24,28 @@ echo "📦 Installing system packages..."
 apt update -qq
 apt install -y -qq curl git nginx ufw certbot python3-certbot-nginx >/dev/null
 
-# Node.js 22 (LTS) if missing
-if ! command -v node >/dev/null 2>&1; then
-  echo "⬇  Installing Node.js 22..."
+# Node.js 22 (LTS) — install if missing OR too old (npm must exist too)
+NODE_OK=false
+if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+  [ "$NODE_MAJOR" -ge 18 ] && NODE_OK=true
+fi
+
+if [ "$NODE_OK" = false ]; then
+  echo "⬇  Installing Node.js 22 (current: $(node -v 2>/dev/null || echo none))..."
+  # remove ancient distro node if present
+  apt remove -y -qq nodejs 2>/dev/null || true
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
   apt install -y -qq nodejs >/dev/null
+  # make sure new node/npm win over any stale ones
+  hash -r
 fi
 echo "   Node $(node -v)  |  npm $(npm -v)"
 
 # PM2 (process manager) if missing
 if ! command -v pm2 >/dev/null 2>&1; then
   echo "⬇  Installing PM2..."
-  npm install -g pm2 >/dev/null 2>&1
+  npm install -g pm2 || npm install -g pm2 --force
 fi
 
 # ---------- 2. Firewall ----------
@@ -56,8 +67,8 @@ fi
 # ---------- 4. Install & seed ----------
 echo "🔧 Installing dependencies & seeding DB..."
 cd "$APP_DIR/digital-store/server"
-npm install --silent
-[ -f data/store.db ] || npm run seed
+npm install --no-fund --no-audit
+[ -f data/store.db ] || [ -f src/data/store.db ] || npm run seed
 
 # ---------- 5. PM2 (keep alive + auto-restart) ----------
 echo "♻  Starting with PM2..."
