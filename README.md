@@ -34,7 +34,7 @@ npm start        # http://localhost:4100
 روی یه VPS اوبونتو (۲۲.۰۴ یا ۲۴.۰۴) با دسترسی root:
 
 ```bash
-bash deploy.sh yourdomain.com
+bash <(curl -s https://raw.githubusercontent.com/ehsanh4/zevrix/main/deploy.sh) yourdomain.com
 ```
 
 این اسکریپت خودش این‌ها رو انجام می‌ده:
