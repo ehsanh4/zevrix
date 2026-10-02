@@ -93,7 +93,36 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+/* ---------- License keys ----------
+   A pool of codes per product. When an order is paid, the next unused
+   key is assigned to that order and marked as sold. */
+CREATE TABLE IF NOT EXISTS license_keys (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  key_text   TEXT NOT NULL UNIQUE,
+  status     TEXT NOT NULL DEFAULT 'available',  -- available | sold
+  order_id   INTEGER,
+  sold_at    DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  FOREIGN KEY (order_id)   REFERENCES orders(id)  ON DELETE SET NULL
+);
 `);
+
+/* ---------- Migrations for existing databases ----------
+   SQLite cannot add columns inside CREATE TABLE IF NOT EXISTS, so we
+   add them explicitly and ignore the error when they already exist. */
+const migrations = [
+  "ALTER TABLE orders ADD COLUMN delivered_at DATETIME"
+];
+for (const sql of migrations) {
+  try {
+    db.exec(sql);
+  } catch {
+    /* column already exists */
+  }
+}
 
 /* ---------- Payment gateway settings (key/value in `settings`) ----------
    pg_zarinpal_enabled   : '0' | '1'

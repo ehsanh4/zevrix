@@ -15,7 +15,12 @@ export const PG_KEYS = [
   "pg_card_sheba",
   "pg_card_desc",
   "tg_bot_token",
-  "tg_chat_id"
+  "tg_chat_id",
+  "smtp_host",
+  "smtp_port",
+  "smtp_user",
+  "smtp_pass",
+  "smtp_from"
 ];
 
 const DEFAULTS = {
@@ -29,7 +34,12 @@ const DEFAULTS = {
   pg_card_sheba: "",
   pg_card_desc: "",
   tg_bot_token: "",
-  tg_chat_id: ""
+  tg_chat_id: "",
+  smtp_host: "",
+  smtp_port: "587",
+  smtp_user: "",
+  smtp_pass: "",
+  smtp_from: ""
 };
 
 /** Read one setting (falls back to default) */

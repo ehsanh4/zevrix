@@ -46,7 +46,7 @@ const I18N = {
       about: "پلتفرم مورد اعتماد برای خرید محصولات دیجیتال و سرویس‌های آنلاین با تحویل آنی و پرداخت امن.",
       products: "محصولات", categories: "دسته‌بندی‌ها", support: "پشتیبانی",
       p1: "لایسنس نرم‌افزار", p2: "سرویس VPN", p3: "ابزارهای هوش مصنوعی", p4: "اشتراک‌های دیجیتال", p5: "بازی و سرگرمی",
-      faq: "سوالات متداول", contact: "تماس با ما", terms: "قوانین و مقررات", privacy: "حریم خصوصی", refund: "سیاست بازگشت وجه",
+      faq: "سوالات متداول", track: "پیگیری سفارش و لایسنس", contact: "تماس با ما", terms: "قوانین و مقررات", privacy: "حریم خصوصی", refund: "سیاست بازگشت وجه",
       rights: "تمامی حقوق محفوظ است.", lang: "زبان:"
     },
     cart: { title: "سبد خرید", empty: "سبد خرید شما خالی است", emptyHint: "محصولات موردنظر را اضافه کنید.", total: "مجموع", checkout: "تسویه حساب", note: "پرداخت امن و تحویل آنی پس از خرید.", removed: "از سبد حذف شد", added: "به سبد اضافه شد" },
@@ -101,7 +101,7 @@ const I18N = {
       about: "The trusted platform for buying digital products and online services with instant delivery and secure payment.",
       products: "Products", categories: "Categories", support: "Support",
       p1: "Software Licenses", p2: "VPN Services", p3: "AI Tools", p4: "Digital Subscriptions", p5: "Games & Entertainment",
-      faq: "FAQ", contact: "Contact Us", terms: "Terms & Conditions", privacy: "Privacy Policy", refund: "Refund Policy",
+      faq: "FAQ", track: "Track Order & Licenses", contact: "Contact Us", terms: "Terms & Conditions", privacy: "Privacy Policy", refund: "Refund Policy",
       rights: "All rights reserved.", lang: "Language:"
     },
     cart: { title: "Shopping Cart", empty: "Your cart is empty", emptyHint: "Add products you'd like to buy.", total: "Total", checkout: "Checkout", note: "Secure payment and instant delivery after purchase.", removed: "Removed from cart", added: "Added to cart" },

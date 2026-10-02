@@ -241,8 +241,18 @@ async function loadProducts() {
   PRODUCTS = await api("/api/admin/products");
 }
 
+/* License-key stock per product, keyed by product id */
+let KEY_STOCK = {};
+
+async function loadKeyStock() {
+  try {
+    KEY_STOCK = await api("/api/admin/products/keys/summary");
+  } catch { KEY_STOCK = {}; }
+}
+
 async function renderProducts() {
   await loadProducts();
+  await loadKeyStock();
   const q = productSearch.trim().toLowerCase();
   const list = q
     ? PRODUCTS.filter((p) =>
@@ -263,7 +273,7 @@ async function renderProducts() {
           <thead>
             <tr>
               <th>محصول</th><th>دسته</th><th>قیمت</th><th>فروش</th>
-              <th>امتیاز</th><th>وضعیت</th><th></th>
+              <th>امتیاز</th><th>موجودی لایسنس</th><th>وضعیت</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -289,6 +299,12 @@ async function renderProducts() {
                 <td class="num">${faNum(p.sold)}</td>
                 <td class="num">⭐ ${Number(p.rating).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}
                   <div class="p-sub">${faNum(p.reviews)} نظر</div></td>
+                <td class="num">
+                  <button class="stock-btn" data-keys="${p.id}" title="مدیریت لایسنس‌ها">
+                    <b>${faNum((KEY_STOCK[p.id] || {}).available || 0)}</b>
+                    <div class="p-sub">آماده تحویل</div>
+                  </button>
+                </td>
                 <td>
                   <span class="pill ${p.active ? "ok" : "muted"}">${p.active ? "فعال" : "غیرفعال"}</span>
                   ${p.featured ? `<span class="pill warn">ویژه</span>` : ""}
@@ -320,6 +336,9 @@ async function renderProducts() {
   });
 
   $("#addProdBtn").addEventListener("click", () => openProductModal(null));
+  $$("[data-keys]").forEach((b) =>
+    b.addEventListener("click", () => openKeysModal(Number(b.dataset.keys)))
+  );
   $$("[data-edit]").forEach((b) =>
     b.addEventListener("click", () => {
       const p = PRODUCTS.find((x) => x.id === Number(b.dataset.edit));
@@ -550,6 +569,113 @@ function openProductModal(p) {
 }
 
 /* ============================================================
+   LICENSE KEYS MODAL (per product)
+   ============================================================ */
+async function openKeysModal(productId) {
+  const p = PRODUCTS.find((x) => x.id === productId);
+  if (!p) return;
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <h3>🔑 لایسنس‌های «${esc(p.name.fa)}»</h3>
+        <button class="icon-btn" id="kClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="keys-add">
+          <label>افزودن لایسنس جدید (هر خط یک لایسنس)</label>
+          <textarea id="kInput" rows="5" placeholder="مثلاً&#10;XXXX-XXXX-XXXX-XXXX&#10;YYYY-YYYY-YYYY-YYYY" dir="ltr"></textarea>
+          <button class="btn btn-primary btn-sm" id="kAdd">➕ افزودن لایسنس</button>
+        </div>
+        <div class="keys-stats" id="kStats"></div>
+        <div class="table-scroll">
+          <table id="kTable">
+            <thead><tr><th>لایسنس</th><th>وضعیت</th><th>سفارش</th><th></th></tr></thead>
+            <tbody id="kBody"><tr><td colspan="4">در حال بارگذاری…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  document.body.style.overflow = "hidden";
+
+  const close = () => {
+    backdrop.remove();
+    document.body.style.overflow = "";
+  };
+  $("#kClose").addEventListener("click", close);
+  backdrop.addEventListener("mousedown", (e) => { if (e.target === backdrop) close(); });
+
+  async function refresh() {
+    const [keys, stock] = await Promise.all([
+      api(`/api/admin/products/${productId}/keys`),
+      api("/api/admin/products/keys/summary").catch(() => ({})),
+    ]);
+    KEY_STOCK = stock;
+    const st = (stock[productId] || { available: 0, sold: 0 });
+    $("#kStats").innerHTML = `
+      <span class="pill ok">آماده تحویل: ${faNum(st.available)}</span>
+      <span class="pill muted">فروخته شده: ${faNum(st.sold)}</span>`;
+
+    if (!keys.length) {
+      $("#kBody").innerHTML = `<tr><td colspan="4" class="empty-cell">
+        <div class="empty"><div class="e-ico">🔑</div>
+        <p>هنوز لایسنسی ثبت نشده. با افزودن لایسنس، تحویل خودکار فعال می‌شود.</p></div>
+      </td></tr>`;
+      return;
+    }
+    $("#kBody").innerHTML = keys.map((k) => `
+      <tr>
+        <td class="mono" dir="ltr">${esc(k.key_text)}</td>
+        <td><span class="pill ${k.status === "available" ? "ok" : "warn"}">
+          ${k.status === "available" ? "آماده" : "فروخته شده"}</span></td>
+        <td>${k.order_ref ? `<span class="mono">${esc(k.order_ref)}</span>` : "—"}</td>
+        <td>${k.status === "available"
+          ? `<button class="icon-btn danger" data-kdel="${k.id}" title="حذف">🗑</button>`
+          : ""}</td>
+      </tr>`).join("");
+
+    $$("[data-kdel]", $("#kBody")).forEach((b) =>
+      b.addEventListener("click", async () => {
+        try {
+          await api(`/api/admin/products/${productId}/keys/${b.dataset.kdel}`, { method: "DELETE" });
+          toast("لایسنس حذف شد");
+          refresh();
+          loadKeyStock().then(() => renderProducts());
+        } catch (err) { toast(err.message, true); }
+      })
+    );
+  }
+
+  $("#kAdd").addEventListener("click", async () => {
+    const raw = $("#kInput").value.trim();
+    if (!raw) return toast("ابتدا لایسنس‌ها را وارد کنید", true);
+    const btn = $("#kAdd");
+    btn.textContent = "در حال افزودن…";
+    btn.disabled = true;
+    try {
+      const r = await api(`/api/admin/products/${productId}/keys`, {
+        method: "POST",
+        body: { keys: raw },
+      });
+      toast(`${faNum(r.added)} لایسنس اضافه شد${r.duplicates ? ` (${faNum(r.duplicates)} تکراری نادیده گرفته شد)` : ""} ✓`);
+      $("#kInput").value = "";
+      refresh();
+      renderProducts();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.textContent = "➕ افزودن لایسنس";
+      btn.disabled = false;
+    }
+  });
+
+  refresh();
+}
+
+/* ============================================================
    ORDERS
    ============================================================ */
 const ORDER_STATUS = {
@@ -574,7 +700,7 @@ async function renderOrders() {
           <thead>
             <tr>
               <th>کد سفارش</th><th>مشتری</th><th>آیتم‌ها</th><th>مبلغ</th>
-              <th>تاریخ</th><th>پرداخت</th><th>وضعیت</th><th></th>
+              <th>تاریخ</th><th>پرداخت</th><th>وضعیت</th><th>لایسنس</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -617,6 +743,14 @@ async function renderOrders() {
                     ${Object.entries(ORDER_STATUS).map(([k, s]) => `
                       <option value="${k}" ${k === o.status ? "selected" : ""}>${s.label}</option>`).join("")}
                   </select>
+                </td>
+                <td style="white-space:nowrap">
+                  ${o.delivered_at
+                    ? `<span class="pill ok">✅ تحویل شد</span>
+                       <div class="p-sub">${esc(o.delivered_at)}</div>`
+                    : o.status === "paid"
+                    ? `<button class="btn btn-primary btn-sm" data-deliver="${o.id}">🎁 تحویل لایسنس</button>`
+                    : `<span class="pill muted">—</span>`}
                 </td>
                 <td>
                   <div class="row-actions">
@@ -667,10 +801,35 @@ async function renderOrders() {
       const o = ORDERS.find((x) => x.id === Number(b.dataset.verify));
       if (!confirm(`پرداخت کارتی سفارش «${o.ref}» تأیید و وضعیت به «پرداخت شده» تغییر کند؟`)) return;
       try {
-        await api(`/api/admin/orders/${o.id}/verify`, { method: "PUT" });
-        toast("پرداخت تأیید شد ✓");
+        const r = await api(`/api/admin/orders/${o.id}/verify`, { method: "PUT" });
+        const d = r.delivery || {};
+        if (d.ok) {
+          const n = (d.delivered || []).reduce((s, x) => s + x.keys.length, 0);
+          toast(`پرداخت تأیید شد — ${faNum(n)} لایسنس تحویل شد ✓`);
+          if (d.missing && d.missing.length)
+            toast(`⚠️ موجودی ناکافی: ${d.missing.map((m) => m.name).join("، ")}`, true);
+        } else {
+          toast("پرداخت تأیید شد، اما لایسنسی در دسترس نیست", true);
+        }
         renderOrders();
         refreshBadge();
+      } catch (err) { toast(err.message, true); }
+    })
+  );
+  $$("[data-deliver]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const o = ORDERS.find((x) => x.id === Number(b.dataset.deliver));
+      try {
+        const r = await api(`/api/admin/orders/${o.id}/deliver`, { method: "POST" });
+        if (r.ok) {
+          const n = (r.delivered || []).reduce((s, x) => s + x.keys.length, 0);
+          toast(`${faNum(n)} لایسنس تحویل مشتری شد ✓`);
+          if (r.missing && r.missing.length)
+            toast(`⚠️ موجودی ناکافی: ${r.missing.map((m) => m.name).join("، ")}`, true);
+        } else {
+          toast(r.error === "no keys available" ? "لایسنسی در دسترس نیست" : (r.error || "خطا در تحویل"), true);
+        }
+        renderOrders();
       } catch (err) { toast(err.message, true); }
     })
   );
@@ -793,6 +952,48 @@ async function renderGateways() {
       </div>
     </div>
 
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>📧 ایمیل تحویل لایسنس (SMTP)</h3>
+        <div class="spacer"></div>
+        <span class="pill ${on("smtp_host") && on("smtp_user") ? "ok" : "muted"}">
+          ${on("smtp_host") && on("smtp_user") ? "فعال" : "غیرفعال"}
+        </span>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>ارسال خودکار لایسنس به ایمیل مشتری</b><span>وقتی پرداخت تأیید می‌شود، لایسنس‌ها به ایمیل مشتری ارسال می‌شوند. بدون تنظیم SMTP، لایسنس‌ها فقط در پنل ادمین قابل مشاهده‌اند.</span></div>
+        <span class="pill info">${on("smtp_host") && on("smtp_user") ? "متصل" : "نیاز به تنظیم"}</span>
+      </div>
+      <div class="set-item">
+        <div class="card-grid">
+          <div class="field">
+            <label>سرور SMTP (Host)</label>
+            <input class="search-box" id="gwSmtpHost" dir="ltr" placeholder="smtp.gmail.com" value="${esc(cfg.smtp_host || "")}" style="width:100%" />
+          </div>
+          <div class="field">
+            <label>پورت</label>
+            <input class="search-box" id="gwSmtpPort" dir="ltr" inputmode="numeric" placeholder="587" value="${esc(cfg.smtp_port || "587")}" style="width:100%" />
+          </div>
+          <div class="field">
+            <label>نام کاربری (ایمیل)</label>
+            <input class="search-box" id="gwSmtpUser" dir="ltr" placeholder="you@example.com" value="${esc(cfg.smtp_user || "")}" style="width:100%" />
+          </div>
+          <div class="field">
+            <label>رمز عبور / App Password</label>
+            <input class="search-box" id="gwSmtpPass" dir="ltr" type="password" placeholder="••••••••" value="${esc(cfg.smtp_pass || "")}" style="width:100%" />
+          </div>
+        </div>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>نام و آدرس فرستنده</b><span>اختیاری — مثلاً <code dir="ltr">"زوریکس" &lt;noreply@zevrix.ir&gt;</code>. خالی بگذارید تا از نام کاربری استفاده شود.</span></div>
+        <input class="search-box" id="gwSmtpFrom" dir="ltr" placeholder='"Zevrix" <noreply@zevrix.ir>' value="${esc(cfg.smtp_from || "")}" style="width:100%;max-width:380px" />
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>راهنمای جیمیل</b><span>برای جیمیل باید «App Password» بسازید (رمز معمولی کار نمی‌کند): حساب Google → امنیت → تأیید دو مرحله‌ای → App passwords → Mail.</span></div>
+        <span class="pill warn">پورت ۴۶۵ یا ۵۸۷</span>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="gwSave">💾 ذخیره تنظیمات درگاه</button>
       <span id="gwHint" style="color:var(--muted);font-size:13px"></span>
@@ -866,7 +1067,12 @@ async function renderGateways() {
           pg_card_sheba: $("#gwCardSheba").value.trim(),
           pg_card_desc: $("#gwCardDesc").value.trim(),
           tg_bot_token: $("#gwTgToken").value.trim(),
-          tg_chat_id: $("#gwTgChat").value.trim()
+          tg_chat_id: $("#gwTgChat").value.trim(),
+          smtp_host: $("#gwSmtpHost").value.trim(),
+          smtp_port: $("#gwSmtpPort").value.trim(),
+          smtp_user: $("#gwSmtpUser").value.trim(),
+          smtp_pass: $("#gwSmtpPass").value,
+          smtp_from: $("#gwSmtpFrom").value.trim()
         }
       });
       toast("تنظیمات درگاه پرداخت ذخیره شد ✓");

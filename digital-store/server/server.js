@@ -35,6 +35,8 @@ import {
   notifyNewOrder,
   notifyReceipt
 } from "./src/telegram.js";
+import { deliverOrder, orderDelivered } from "./src/fulfillment.js";
+import { sendMail, smtpConfigured, SMTP_KEYS } from "./src/mail.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, ".."); // digital-store/
@@ -242,6 +244,9 @@ app.get("/api/payment/zarinpal/callback", async (req, res) => {
     const result = await verifyZarinpalPayment({ authority: Authority, amount: order.total });
     if (result.status === "paid") {
       markPaymentPaid(order.id, result.refId);
+      await deliverOrder(order.id).catch((e) =>
+        console.error("[fulfillment] auto-deliver failed:", e.message)
+      );
       return res.redirect(
         frontBase + "/payment-result.html?status=ok&ref=" + encodeURIComponent(order.ref) +
         "&refid=" + encodeURIComponent(result.refId)
@@ -261,6 +266,39 @@ function getFrontBase(req) {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost:4100";
   return proto + "://" + host;
 }
+
+/* ============================================================
+   PUBLIC — ORDER TRACKING (license delivery)
+   Customer looks up an order by ref + email to see its keys.
+   ============================================================ */
+app.get("/api/order/track", (req, res) => {
+  const ref = String(req.query.ref || "").trim().toUpperCase();
+  const email = String(req.query.email || "").trim().toLowerCase();
+  if (!ref || !email) return res.status(400).json({ error: "کد سفارش و ایمیل الزامی است" });
+
+  const order = db.prepare("SELECT * FROM orders WHERE ref = ?").get(ref);
+  if (!order || order.email.toLowerCase() !== email)
+    return res.status(404).json({ error: "سفارشی با این اطلاعات پیدا نشد" });
+
+  const keys = db
+    .prepare(
+      `SELECT k.key_text, p.fa AS product_name
+       FROM license_keys k LEFT JOIN products p ON p.id = k.product_id
+       WHERE k.order_id = ? ORDER BY k.id`
+    )
+    .all(order.id);
+
+  res.json({
+    ref: order.ref,
+    customer: order.customer,
+    total: order.total,
+    status: order.status,
+    paid: order.status === "paid",
+    delivered: !!order.delivered_at,
+    items: JSON.parse(order.items || "[]"),
+    keys,
+  });
+});
 
 /* ============================================================
    ADMIN AUTH
@@ -377,6 +415,75 @@ app.put("/api/admin/products/:id", requireAuth, (req, res) => {
 app.delete("/api/admin/products/:id", requireAuth, (req, res) => {
   const info = db.prepare("DELETE FROM products WHERE id = ?").run(Number(req.params.id));
   if (info.changes === 0) return res.status(404).json({ error: "محصول پیدا نشد" });
+  res.json({ ok: true });
+});
+
+/* ============================================================
+   ADMIN — LICENSE KEYS (per product)
+   ============================================================ */
+
+/* Stock summary for every product (used by the admin product list) */
+app.get("/api/admin/products/keys/summary", requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT p.id,
+              COUNT(CASE WHEN k.status='available' THEN 1 END) AS available,
+              COUNT(CASE WHEN k.status='sold' THEN 1 END) AS sold
+       FROM products p LEFT JOIN license_keys k ON k.product_id = p.id
+       GROUP BY p.id`
+    )
+    .all();
+  res.json(
+    rows.reduce((m, r) => ((m[r.id] = { available: r.available, sold: r.sold }), m), {})
+  );
+});
+
+/* List keys of one product */
+app.get("/api/admin/products/:id/keys", requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT k.id, k.key_text, k.status, k.order_id, k.sold_at, o.ref AS order_ref
+       FROM license_keys k LEFT JOIN orders o ON o.id = k.order_id
+       WHERE k.product_id = ? ORDER BY k.id DESC`
+    )
+    .all(Number(req.params.id));
+  res.json(rows);
+});
+
+/* Add keys (bulk) — one key per line in `keys` */
+app.post("/api/admin/products/:id/keys", requireAuth, (req, res) => {
+  const pid = Number(req.params.id);
+  const product = db.prepare("SELECT id FROM products WHERE id = ?").get(pid);
+  if (!product) return res.status(404).json({ error: "محصول پیدا نشد" });
+
+  const raw = typeof req.body?.keys === "string" ? req.body.keys : "";
+  const keys = raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!keys.length) return res.status(400).json({ error: "هیچ لایسنسی وارد نشده است" });
+
+  const ins = db.prepare(
+    "INSERT OR IGNORE INTO license_keys (product_id, key_text) VALUES (?, ?)"
+  );
+  let added = 0;
+  for (const k of keys) {
+    const r = ins.run(pid, k);
+    if (r.changes > 0) added++;
+  }
+
+  res.json({ ok: true, added, duplicates: keys.length - added });
+});
+
+/* Delete a single key (only if still available) */
+app.delete("/api/admin/products/:id/keys/:keyId", requireAuth, (req, res) => {
+  const info = db
+    .prepare(
+      "DELETE FROM license_keys WHERE id = ? AND product_id = ? AND status = 'available'"
+    )
+    .run(Number(req.params.keyId), Number(req.params.id));
+  if (info.changes === 0)
+    return res.status(400).json({ error: "لایسنس قابل حذف نیست (فروخته شده یا پیدا نشد)" });
   res.json({ ok: true });
 });
 
@@ -504,7 +611,8 @@ app.put("/api/admin/payment/gateways", requireAuth, (req, res) => {
   const texts = [
     "pg_zarinpal_merchant", "pg_card_number", "pg_card_holder",
     "pg_card_bank", "pg_card_sheba", "pg_card_desc",
-    "tg_bot_token", "tg_chat_id"
+    "tg_bot_token", "tg_chat_id",
+    ...SMTP_KEYS
   ];
 
   for (const k of flags) if (b[k] !== undefined) setSetting(k, b[k] ? "1" : "0");
@@ -557,8 +665,8 @@ app.get("/api/admin/orders/:id/payment", requireAuth, (req, res) => {
   res.json({ order: { id: order.id, ref: order.ref, total: order.total, status: order.status }, payment: pay || null });
 });
 
-/* Admin manually marks a card payment as paid */
-app.put("/api/admin/orders/:id/verify", requireAuth, (req, res) => {
+/* Admin manually marks a card payment as paid → auto-deliver licenses */
+app.put("/api/admin/orders/:id/verify", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(id);
   if (!order) return res.status(404).json({ error: "سفارش پیدا نشد" });
@@ -566,7 +674,33 @@ app.put("/api/admin/orders/:id/verify", requireAuth, (req, res) => {
     "UPDATE order_payments SET status='paid', paid_at=CURRENT_TIMESTAMP WHERE order_id=?"
   ).run(id);
   db.prepare("UPDATE orders SET status='paid' WHERE id=?").run(id);
-  res.json({ ok: true });
+
+  const result = await deliverOrder(id).catch((e) => ({
+    ok: false,
+    error: e.message,
+  }));
+  res.json({ ok: true, delivery: result });
+});
+
+/* Manually (re-)deliver an order's licenses */
+app.post("/api/admin/orders/:id/deliver", requireAuth, async (req, res) => {
+  const result = await deliverOrder(Number(req.params.id)).catch((e) => ({
+    ok: false,
+    error: e.message,
+  }));
+  res.json(result);
+});
+
+/* Delivered keys of one order (admin order detail) */
+app.get("/api/admin/orders/:id/keys", requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT k.id, k.key_text, k.product_id, p.fa AS product_name
+       FROM license_keys k LEFT JOIN products p ON p.id = k.product_id
+       WHERE k.order_id = ? ORDER BY k.id`
+    )
+    .all(Number(req.params.id));
+  res.json(rows);
 });
 
 /* ============================================================

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>پیگیری سفارش — ZEVRIX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #05070e;
+      --card: rgba(255, 255, 255, .04);
+      --line: rgba(255, 255, 255, .09);
+      --text: #eef1f8;
+      --muted: #9aa3b5;
+      --grad: linear-gradient(135deg, #6d5dfc, #00d4ff);
+      --ok: #00d4a0;
+      --err: #ff5c7a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Vazirmatn", system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 36px 28px;
+      backdrop-filter: blur(14px);
+    }
+    .logo {
+      font-size: 24px; font-weight: 800; letter-spacing: 2px;
+      background: var(--grad); -webkit-background-clip: text; background-clip: text;
+      color: transparent; text-align: center; margin-bottom: 6px;
+    }
+    h1 { font-size: 20px; text-align: center; margin-bottom: 24px; font-weight: 700; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .field input {
+      width: 100%; padding: 12px 14px; font-size: 15px;
+      background: rgba(0,0,0,.3); border: 1px solid var(--line);
+      border-radius: 12px; color: var(--text); font-family: inherit;
+      transition: border-color .15s;
+    }
+    .field input:focus { outline: none; border-color: #6d5dfc; }
+    .field input[dir="ltr"] { font-family: ui-monospace, monospace; }
+    .btn {
+      width: 100%; padding: 13px; font-size: 15px; font-weight: 700;
+      font-family: inherit; color: #fff; border: none; border-radius: 12px;
+      background: var(--grad); cursor: pointer; transition: transform .15s, opacity .15s;
+    }
+    .btn:hover { transform: translateY(-1px); opacity: .92; }
+    .btn:disabled { opacity: .5; cursor: wait; transform: none; }
+    .msg { text-align: center; margin-top: 14px; font-size: 14px; color: var(--err); min-height: 20px; }
+
+    .result { display: none; margin-top: 8px; }
+    .result.show { display: block; }
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px;
+    }
+    .row:last-child { border-bottom: none; }
+    .row .k { color: var(--muted); }
+    .pill {
+      display: inline-block; padding: 4px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+    }
+    .pill.ok { background: rgba(0,212,160,.14); color: var(--ok); }
+    .pill.warn { background: rgba(255,180,0,.14); color: #ffb400; }
+    .pill.muted { background: rgba(255,255,255,.07); color: var(--muted); }
+
+    .keys { margin-top: 20px; }
+    .keys h2 { font-size: 15px; margin-bottom: 12px; font-weight: 700; }
+    .key-box {
+      background: rgba(0,0,0,.35); border: 1px solid var(--line);
+      border-radius: 12px; padding: 14px; margin-bottom: 10px;
+    }
+    .key-box .name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .key-box .code {
+      font-family: ui-monospace, "Cascadia Mono", monospace; font-size: 14px;
+      direction: ltr; word-break: break-all; color: var(--ok); line-height: 1.8;
+    }
+    .note {
+      margin-top: 18px; font-size: 12.5px; color: var(--muted);
+      text-align: center; line-height: 1.7;
+    }
+    .back { text-align: center; margin-top: 22px; }
+    .back a { color: var(--muted); font-size: 13px; text-decoration: none; }
+    .back a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">ZEVRIX</div>
+    <h1>پیگیری سفارش و لایسنس</h1>
+
+    <form id="trackForm">
+      <div class="field">
+        <label for="ref">کد سفارش (مثلاً DS-XXXXXX)</label>
+        <input id="ref" dir="ltr" placeholder="DS-XXXXXX" autocomplete="off" required />
+      </div>
+      <div class="field">
+        <label for="email">ایمیلی که هنگام خرید وارد کردید</label>
+        <input id="email" dir="ltr" type="email" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <button class="btn" type="submit" id="trackBtn">مشاهده لایسنس‌ها</button>
+      <div class="msg" id="msg"></div>
+    </form>
+
+    <div class="result" id="result"></div>
+
+    <div class="back"><a href="/">← بازگشت به فروشگاه</a></div>
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+    const faNum = (n) => Number(n || 0).toLocaleString("fa-IR");
+
+    $("#trackForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = $("#msg");
+      const btn = $("#trackBtn");
+      msg.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "در حال جستجو…";
+      try {
+        const ref = encodeURIComponent($("#ref").value.trim());
+        const email = encodeURIComponent($("#email").value.trim());
+        const r = await fetch(`/api/order/track?ref=${ref}&email=${email}`);
+        const data = await r.json();
+        if (!r.ok) {
+          $("#result").classList.remove("show");
+          msg.textContent = data.error || "سفارشی پیدا نشد";
+          return;
+        }
+        render(data);
+      } catch (err) {
+        msg.textContent = "خطا در ارتباط با سرور";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "مشاهده لایسنس‌ها";
+      }
+    });
+
+    function render(o) {
+      const box = $("#result");
+      const statusPill = o.delivered
+        ? '<span class="pill ok">✅ تحویل داده شد</span>'
+        : o.paid
+        ? '<span class="pill warn">در حال آماده‌سازی…</span>'
+        : '<span class="pill muted">در انتظار پرداخت</span>';
+
+      const items = (o.items || [])
+        .map((it) => `${esc(it.name || "محصول")} ×${faNum(it.qty || 1)}`)
+        .join("، ");
+
+      box.innerHTML = `
+        <div class="row"><span class="k">کد سفارش</span><b dir="ltr">${esc(o.ref)}</b></div>
+        <div class="row"><span class="k">وضعیت</span>${statusPill}</div>
+        <div class="row"><span class="k">آیتم‌ها</span><span>${items || "—"}</span></div>
+        <div class="row"><span class="k">مبلغ</span><b>${faNum(o.total)} تومان</b></div>
+        ${
+          o.keys && o.keys.length
+            ? `<div class="keys">
+                 <h2>🔑 لایسنس‌های شما</h2>
+                 ${o.keys
+                   .map((k) => `<div class="key-box">
+                     <div class="name">${esc(k.product_name)}</div>
+                     <div class="code">${esc(k.key_text)}</div>
+                   </div>`)
+                   .join("")}
+               </div>`
+            : `<div class="note">لایسنس‌های شما بلافاصله پس از تأیید پرداخت در همین صفحه نمایش داده می‌شوند.<br/>در صورت تأخیر بیشتر از ۱۵ دقیقه، با پشتیبانی تماس بگیرید.</div>`
+        }
+      `;
+      box.classList.add("show");
+    }
+  </script>
+</body>
+</html>
