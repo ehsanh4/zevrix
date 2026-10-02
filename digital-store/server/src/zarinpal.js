@@ -151,7 +151,14 @@ export function markPaymentFailed(orderId) {
 }
 
 export function attachReceipt(orderId, receiptUrl, note) {
-  db.prepare(
-    "UPDATE order_payments SET receipt_url=?, payer_note=? WHERE order_id=?"
-  ).run(receiptUrl, note || null, orderId);
+  const exists = db.prepare("SELECT 1 FROM order_payments WHERE order_id = ?").get(orderId);
+  if (exists) {
+    db.prepare(
+      "UPDATE order_payments SET receipt_url=?, payer_note=? WHERE order_id=?"
+    ).run(receiptUrl, note || null, orderId);
+  } else {
+    db.prepare(
+      "INSERT INTO order_payments (order_id, method, status, receipt_url, payer_note) VALUES (?,?,?,?,?)"
+    ).run(orderId, "card", "pending", receiptUrl, note || null);
+  }
 }

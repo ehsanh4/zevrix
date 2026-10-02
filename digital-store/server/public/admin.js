@@ -606,7 +606,11 @@ async function renderOrders() {
                     ? `<span class="pill warn">در انتظار</span>`
                     : `<span class="pill muted">—</span>`}
                   ${o.refId ? `<div class="p-sub" dir="ltr">کد: ${esc(o.refId)}</div>` : ""}
-                  ${o.receiptUrl ? `<div style="margin-top:4px"><a href="${esc(o.receiptUrl)}" target="_blank" class="btn btn-ghost btn-sm">🧾 رسید</a></div>` : ""}
+                  ${o.receiptUrl && o.receiptUrl.startsWith("/")
+                    ? `<div style="margin-top:4px"><a href="${esc(o.receiptUrl)}" target="_blank" class="btn btn-ghost btn-sm">🧾 رسید</a></div>`
+                    : o.payMethod === "card"
+                    ? `<div style="margin-top:4px"><span class="pill info">📨 ارسال شده به تلگرام</span></div>`
+                    : ""}
                 </td>
                 <td>
                   <select data-status="${o.id}" class="search-box" style="width:auto">
@@ -621,7 +625,7 @@ async function renderOrders() {
                       : ""}
                     <button class="icon-btn danger" data-odel="${o.id}" title="حذف">🗑</button>
                   </div>
-                  ${o.receiptUrl
+                  ${o.receiptUrl && o.receiptUrl.startsWith("/")
                     ? `<div style="margin-top:6px"><img src="${esc(o.receiptUrl)}" alt="رسید" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line)" /></div>`
                     : ""}
                 </td>
@@ -763,6 +767,32 @@ async function renderGateways() {
       </div>
     </div>
 
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>📨 نوتیفیکیشن تلگرام</h3>
+        <div class="spacer"></div>
+        <span class="pill ${on("tg_bot_token") && on("tg_chat_id") ? "ok" : "muted"}">
+          ${on("tg_bot_token") && on("tg_chat_id") ? "فعال" : "غیرفعال"}
+        </span>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>فعال‌سازی ارسال به تلگرام</b><span>سفارش‌های جدید و رسیدهای آپلودشده به تلگرام شما ارسال می‌شوند و روی سرور ذخیره نمی‌شوند</span></div>
+        <span class="pill info">${on("tg_bot_token") && on("tg_chat_id") ? "متصل" : "نیاز به تنظیم"}</span>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>توکن ربات (Bot Token)</b><span>از <code dir="ltr">@BotFather</code> دریافت می‌شود — مثال: <code dir="ltr">123456:ABC-DEF...</code></span></div>
+        <input class="search-box" id="gwTgToken" dir="ltr" placeholder="bot token" value="${esc(cfg.tg_bot_token || "")}" style="width:100%;max-width:380px" />
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>شناسه چت (Chat ID)</b><span>چت یا کانالی که پیام‌ها به آن ارسال می‌شوند — مثال: <code dir="ltr">123456789</code> یا <code dir="ltr">@channelname</code></span></div>
+        <input class="search-box" id="gwTgChat" dir="ltr" placeholder="chat id" value="${esc(cfg.tg_chat_id || "")}" style="width:100%;max-width:380px" />
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>نحوه راه‌اندازی</b><span>۱) در تلگرام به <code dir="ltr">@BotFather</code> بگویید <code dir="ltr">/newbot</code> → ۲) توکن را اینجا بگذارید → ۳) به ربات پیام بدهید یا آن را ادمین کانال کنید → ۴) Chat ID را اینجا بگذارید.</span></div>
+        <button class="btn btn-ghost" id="gwTgTest">🔔 تست ارسال</button>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="gwSave">💾 ذخیره تنظیمات درگاه</button>
       <span id="gwHint" style="color:var(--muted);font-size:13px"></span>
@@ -779,6 +809,29 @@ async function renderGateways() {
   cardInput.addEventListener("input", () => {
     const digits = cardInput.value.replace(/\D/g, "").slice(0, 16);
     cardInput.value = digits.replace(/(.{4})/g, "$1 ").trim();
+  });
+
+  /* test the Telegram bot */
+  $("#gwTgTest").addEventListener("click", async () => {
+    const btn = $("#gwTgTest");
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "در حال ارسال…";
+    try {
+      const data = await api("/api/admin/payment/telegram/test", {
+        method: "POST",
+        body: {
+          token: $("#gwTgToken").value.trim(),
+          chat_id: $("#gwTgChat").value.trim()
+        }
+      });
+      toast(data.ok ? "پیام تست به تلگرام ارسال شد ✓" : data.error || "ارسال ناموفق بود", !data.ok);
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
   });
 
   $("#gwSave").addEventListener("click", async () => {
@@ -811,7 +864,9 @@ async function renderGateways() {
           pg_card_holder: $("#gwCardHolder").value.trim(),
           pg_card_bank: $("#gwCardBank").value.trim(),
           pg_card_sheba: $("#gwCardSheba").value.trim(),
-          pg_card_desc: $("#gwCardDesc").value.trim()
+          pg_card_desc: $("#gwCardDesc").value.trim(),
+          tg_bot_token: $("#gwTgToken").value.trim(),
+          tg_chat_id: $("#gwTgChat").value.trim()
         }
       });
       toast("تنظیمات درگاه پرداخت ذخیره شد ✓");

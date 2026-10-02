@@ -13,7 +13,9 @@ export const PG_KEYS = [
   "pg_card_holder",
   "pg_card_bank",
   "pg_card_sheba",
-  "pg_card_desc"
+  "pg_card_desc",
+  "tg_bot_token",
+  "tg_chat_id"
 ];
 
 const DEFAULTS = {
@@ -25,7 +27,9 @@ const DEFAULTS = {
   pg_card_holder: "",
   pg_card_bank: "",
   pg_card_sheba: "",
-  pg_card_desc: ""
+  pg_card_desc: "",
+  tg_bot_token: "",
+  tg_chat_id: ""
 };
 
 /** Read one setting (falls back to default) */

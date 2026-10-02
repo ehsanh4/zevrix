@@ -14,6 +14,7 @@ import { signToken, requireAuth } from "./src/auth.js";
 import {
   getGatewayConfig,
   getPublicGatewayConfig,
+  getSetting,
   setSetting,
   availableMethods,
   maskCard
@@ -28,6 +29,12 @@ import {
   markPaymentFailed,
   attachReceipt
 } from "./src/zarinpal.js";
+import {
+  telegramConfigured,
+  tgDocument,
+  notifyNewOrder,
+  notifyReceipt
+} from "./src/telegram.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, ".."); // digital-store/
@@ -86,6 +93,15 @@ app.post("/api/orders", (req, res) => {
     `INSERT INTO orders (ref, customer, email, phone, total, status, items)
      VALUES (?,?,?,?,?, 'pending', ?)`
   ).run(ref, customer, email, phone || null, Number(total) || 0, JSON.stringify(items));
+
+  /* Telegram notification (best-effort, never blocks the order) */
+  if (telegramConfigured()) {
+    notifyNewOrder(
+      { ref, customer, email, phone, total, items },
+      availableMethods().includes("zarinpal") ? "آنلاین (زرین‌پال)" : "کارت به کارت"
+    ).catch(() => {});
+  }
+
   res.json({ ok: true, ref });
 });
 
@@ -146,13 +162,7 @@ app.post("/api/payment/start", async (req, res) => {
 
 /* Upload receipt for card-to-card payment (public, order-ref gated) */
 const receiptUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".png";
-      cb(null, "receipt-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ext);
-    }
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (/^image\/(png|jpe?g|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf")
@@ -161,15 +171,55 @@ const receiptUpload = multer({
   }
 });
 
-app.post("/api/payment/receipt", receiptUpload.single("receipt"), (req, res) => {
+app.post("/api/payment/receipt", receiptUpload.single("receipt"), async (req, res) => {
   const ref = req.body && req.body.ref;
   if (!ref) return res.status(400).json({ error: "کد پیگیری الزامی است" });
   const order = db.prepare("SELECT * FROM orders WHERE ref = ?").get(ref);
   if (!order) return res.status(404).json({ order: null, error: "سفارش پیدا نشد" });
   if (!req.file) return res.status(400).json({ error: "فایلی ارسال نشده است" });
 
-  const url = "/uploads/" + req.file.filename;
-  attachReceipt(order.id, url, req.body.note || null);
+  const note = req.body.note || null;
+  const isPdf = req.file.mimetype === "application/pdf";
+  const ext = isPdf ? ".pdf" : "." + (req.file.mimetype.split("/")[1] || "png");
+
+  if (telegramConfigured()) {
+    /* Send to Telegram. If it fails, fall back to saving on the server
+       so the customer's receipt is never lost. */
+    const tmp = path.join(UPLOADS_DIR, "tmp-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ext);
+    try {
+      fs.writeFileSync(tmp, req.file.buffer);
+      const ok = isPdf
+        ? await tgDocument(tmp, `🧾 <b>رسید کارت به کارت</b>\n\nکد پیگیری: <code>${order.ref}</code>\nمبلغ: <b>${Number(order.total).toLocaleString("fa-IR")} تومان</b>\n${order.email ? `ایمیل: <code>${order.email}</code>\n` : ""}${note ? `یادداشت: ${note}\n` : ""}\n✅ در پنل ادمین تأیید کنید`)
+        : await notifyReceipt(order, tmp, note);
+      if (ok) {
+        fs.unlinkSync(tmp);
+        attachReceipt(order.id, "telegram", note);
+        return res.json({ ok: true, url: null });
+      }
+      /* Telegram failed -> keep the file as fallback */
+      const filename = "receipt-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ext;
+      fs.copyFileSync(tmp, path.join(UPLOADS_DIR, filename));
+      fs.unlinkSync(tmp);
+      const url = "/uploads/" + filename;
+      attachReceipt(order.id, url, note);
+      return res.json({ ok: true, url });
+    } catch (e) {
+      console.error("receipt upload error:", e);
+      if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+      return res.status(500).json({ error: "ارسال رسید انجام نشد، دوباره تلاش کنید" });
+    }
+  }
+
+  /* Fallback: save on server as before */
+  const filename = "receipt-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ext;
+  const abs = path.join(UPLOADS_DIR, filename);
+  try {
+    fs.writeFileSync(abs, req.file.buffer);
+  } catch {
+    return res.status(500).json({ error: "ذخیره فایل ناموفق بود" });
+  }
+  const url = "/uploads/" + filename;
+  attachReceipt(order.id, url, note);
   res.json({ ok: true, url });
 });
 
@@ -453,7 +503,8 @@ app.put("/api/admin/payment/gateways", requireAuth, (req, res) => {
   const flags = ["pg_zarinpal_enabled", "pg_zarinpal_sandbox", "pg_card_enabled"];
   const texts = [
     "pg_zarinpal_merchant", "pg_card_number", "pg_card_holder",
-    "pg_card_bank", "pg_card_sheba", "pg_card_desc"
+    "pg_card_bank", "pg_card_sheba", "pg_card_desc",
+    "tg_bot_token", "tg_chat_id"
   ];
 
   for (const k of flags) if (b[k] !== undefined) setSetting(k, b[k] ? "1" : "0");
@@ -467,6 +518,33 @@ app.put("/api/admin/payment/gateways", requireAuth, (req, res) => {
   }
 
   res.json({ ok: true, config: getGatewayConfig() });
+});
+
+/* Test the Telegram bot (admin) — accepts values from the form so it works
+   even before saving */
+app.post("/api/admin/payment/telegram/test", requireAuth, async (req, res) => {
+  const token = (req.body && req.body.token) || getSetting("tg_bot_token");
+  const chatId = (req.body && req.body.chat_id) || getSetting("tg_chat_id");
+  if (!token || !chatId)
+    return res.status(400).json({ ok: false, error: "توکن و شناسه چت را وارد کنید" });
+
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: "🔔 تست اتصال ربات ZEVRIX\nاگر این پیام را دیدید، اتصال برقرار است.",
+        parse_mode: "HTML"
+      })
+    });
+    const data = await r.json();
+    if (!data.ok)
+      return res.status(400).json({ ok: false, error: data.description || "خطای تلگرام" });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "اتصال به تلگرام برقرار نشد" });
+  }
 });
 
 /* Order payment details incl. receipt (admin) */
