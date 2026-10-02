@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نتیجه پرداخت — ZEVRIX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #05070e;
+      --card: rgba(255, 255, 255, .04);
+      --line: rgba(255, 255, 255, .09);
+      --text: #eef1f8;
+      --muted: #9aa3b5;
+      --grad: linear-gradient(135deg, #6d5dfc, #00d4ff);
+      --ok: #00d4a0;
+      --err: #ff5c7a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Vazirmatn", system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 460px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 36px 28px;
+      text-align: center;
+      backdrop-filter: blur(14px);
+    }
+    .ico {
+      width: 76px;
+      height: 76px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 38px;
+    }
+    .ico.ok { background: rgba(0, 212, 160, .14); box-shadow: 0 0 34px rgba(0, 212, 160, .22); }
+    .ico.err { background: rgba(255, 92, 122, .14); box-shadow: 0 0 34px rgba(255, 92, 122, .22); }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 10px; }
+    p { color: var(--muted); font-size: 14px; line-height: 1.8; }
+    .ref {
+      display: inline-block;
+      margin: 18px 0;
+      padding: 10px 18px;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      direction: ltr;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 12px 26px;
+      border-radius: 12px;
+      border: none;
+      background: var(--grad);
+      color: #fff;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 18px;
+      border: 3px solid var(--line);
+      border-top-color: #6d5dfc;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card" id="box"></div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const status = params.get("status");
+    const ref = params.get("ref");
+    const refid = params.get("refid");
+    const box = document.getElementById("box");
+
+    if (status === "ok") {
+      box.innerHTML = `
+        <div class="ico ok">✅</div>
+        <h1>پرداخت با موفقیت انجام شد</h1>
+        <p>سفارش شما ثبت و پرداخت شد.<br />کد پیگیری زیر را نگه دارید:</p>
+        <div class="ref">${ref || "—"}</div>
+        ${refid ? `<p>کد مرجع زرین‌پال: <b dir="ltr">${refid}</b></p>` : ""}
+        <br /><br />
+        <a class="btn" href="/">بازگشت به فروشگاه</a>`;
+    } else if (status === "failed") {
+      box.innerHTML = `
+        <div class="ico err">❌</div>
+        <h1>پرداخت ناموفق بود</h1>
+        <p>متأسفانه پرداخت شما تکمیل نشد.<br />مبلغ کسر شده در صورت وجود طی ۷۲ ساعت بازگردانده می‌شود.</p>
+        <br /><br />
+        <a class="btn" href="/">بازگشت به فروشگاه</a>`;
+    } else {
+      box.innerHTML = `
+        <div class="spinner"></div>
+        <h1>در حال بررسی پرداخت…</h1>
+        <p>لطفاً صبر کنید.</p>`;
+    }
+  </script>
+</body>
+</html>

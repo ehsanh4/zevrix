@@ -11,6 +11,23 @@ import { fileURLToPath } from "url";
 
 import db, { productFromRow, UPLOADS_DIR } from "./src/db.js";
 import { signToken, requireAuth } from "./src/auth.js";
+import {
+  getGatewayConfig,
+  getPublicGatewayConfig,
+  setSetting,
+  availableMethods,
+  maskCard
+} from "./src/payment.js";
+import {
+  zarinpalEnabled,
+  createZarinpalRequest,
+  verifyZarinpalPayment,
+  createPaymentRecord,
+  getPaymentByAuthority,
+  markPaymentPaid,
+  markPaymentFailed,
+  attachReceipt
+} from "./src/zarinpal.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, ".."); // digital-store/
@@ -71,6 +88,129 @@ app.post("/api/orders", (req, res) => {
   ).run(ref, customer, email, phone || null, Number(total) || 0, JSON.stringify(items));
   res.json({ ok: true, ref });
 });
+
+/* ============================================================
+   PUBLIC — PAYMENT GATEWAYS
+   ============================================================ */
+
+/* Available payment methods (public) */
+app.get("/api/payment/methods", (req, res) => {
+  res.json(getPublicGatewayConfig());
+});
+
+/* Start payment for an order */
+app.post("/api/payment/start", async (req, res) => {
+  const { ref, method } = req.body || {};
+  if (!ref) return res.status(400).json({ error: "کد پیگیری الزامی است" });
+
+  const order = db.prepare("SELECT * FROM orders WHERE ref = ?").get(ref);
+  if (!order) return res.status(404).json({ error: "سفارش پیدا نشد" });
+  if (order.status === "paid")
+    return res.status(400).json({ error: "این سفارش قبلاً پرداخت شده است" });
+
+  const methods = availableMethods();
+  if (!methods.length)
+    return res.status(400).json({ error: "هیچ روش پرداختی فعال نیست" });
+
+  const payMethod = method === "card" ? "card" : "zarinpal";
+  if (!methods.includes(payMethod))
+    return res.status(400).json({ error: "این روش پرداخت فعال نیست" });
+
+  /* ---- Card to card: show card info, customer uploads receipt later ---- */
+  if (payMethod === "card") {
+    createPaymentRecord(order.id, "card");
+    return res.json({
+      ok: true,
+      method: "card",
+      card: getPublicGatewayConfig().card
+    });
+  }
+
+  /* ---- ZarinPal: create transaction and return redirect URL ---- */
+  try {
+    const items = JSON.parse(order.items || "[]");
+    const desc = items.length
+      ? items.map((i) => i.name + (i.qty > 1 ? " ×" + i.qty : "")).join("، ")
+      : order.ref;
+    const { authority, payUrl } = await createZarinpalRequest(req, {
+      orderId: order.id,
+      amount: order.total,
+      description: `سفارش ${order.ref} — ${desc}`.slice(0, 250)
+    });
+    createPaymentRecord(order.id, "zarinpal", { authority });
+    res.json({ ok: true, method: "zarinpal", payUrl });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/* Upload receipt for card-to-card payment (public, order-ref gated) */
+const receiptUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".png";
+      cb(null, "receipt-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ext);
+    }
+  }),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|jpe?g|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf")
+      cb(null, true);
+    else cb(new Error("فقط فایل تصویری یا PDF مجاز است"));
+  }
+});
+
+app.post("/api/payment/receipt", receiptUpload.single("receipt"), (req, res) => {
+  const ref = req.body && req.body.ref;
+  if (!ref) return res.status(400).json({ error: "کد پیگیری الزامی است" });
+  const order = db.prepare("SELECT * FROM orders WHERE ref = ?").get(ref);
+  if (!order) return res.status(404).json({ order: null, error: "سفارش پیدا نشد" });
+  if (!req.file) return res.status(400).json({ error: "فایلی ارسال نشده است" });
+
+  const url = "/uploads/" + req.file.filename;
+  attachReceipt(order.id, url, req.body.note || null);
+  res.json({ ok: true, url });
+});
+
+/* ZarinPal callback (redirect from gateway) */
+app.get("/api/payment/zarinpal/callback", async (req, res) => {
+  const { Authority, Status } = req.query;
+  const frontBase = getFrontBase(req);
+
+  if (!Authority || Status !== "OK") {
+    return res.redirect(frontBase + "/payment-result.html?status=failed");
+  }
+
+  const pay = getPaymentByAuthority(Authority);
+  if (!pay) return res.redirect(frontBase + "/payment-result.html?status=failed");
+
+  const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(pay.order_id);
+  if (!order) return res.redirect(frontBase + "/payment-result.html?status=failed");
+
+  try {
+    const result = await verifyZarinpalPayment({ authority: Authority, amount: order.total });
+    if (result.status === "paid") {
+      markPaymentPaid(order.id, result.refId);
+      return res.redirect(
+        frontBase + "/payment-result.html?status=ok&ref=" + encodeURIComponent(order.ref) +
+        "&refid=" + encodeURIComponent(result.refId)
+      );
+    }
+    markPaymentFailed(order.id);
+    return res.redirect(frontBase + "/payment-result.html?status=failed");
+  } catch (err) {
+    markPaymentFailed(order.id);
+    return res.redirect(frontBase + "/payment-result.html?status=failed");
+  }
+});
+
+/* Public: base url of the storefront for redirects */
+function getFrontBase(req) {
+  const proto = req.headers["x-forwarded-proto"] || (req.connection && req.connection.encrypted ? "https" : "http");
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost:4100";
+  return proto + "://" + host;
+}
 
 /* ============================================================
    ADMIN AUTH
@@ -261,8 +401,25 @@ app.delete("/api/admin/branding/logo", requireAuth, (req, res) => {
    ============================================================ */
 app.get("/api/admin/orders", requireAuth, (req, res) => {
   const rows = db.prepare("SELECT * FROM orders ORDER BY created_at DESC").all();
+  const pays = db
+    .prepare("SELECT order_id, method, status, receipt_url, ref_id, authority FROM order_payments")
+    .all()
+    .reduce((m, p) => ((m[p.order_id] = p), m), {});
+
   res.json(
-    rows.map((o) => ({ ...o, items: JSON.parse(o.items), active: undefined }))
+    rows.map((o) => {
+      const p = pays[o.id];
+      return {
+        ...o,
+        items: JSON.parse(o.items),
+        active: undefined,
+        payMethod: p ? p.method : null,
+        payStatus: p ? p.status : null,
+        receiptUrl: p ? p.receipt_url : null,
+        refId: p ? p.ref_id : null,
+        authority: p ? p.authority : null
+      };
+    })
   );
 });
 
@@ -278,6 +435,59 @@ app.put("/api/admin/orders/:id/status", requireAuth, (req, res) => {
 
 app.delete("/api/admin/orders/:id", requireAuth, (req, res) => {
   db.prepare("DELETE FROM orders WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+/* ============================================================
+   ADMIN — PAYMENT GATEWAYS
+   ============================================================ */
+
+/* Gateway config (admin) */
+app.get("/api/admin/payment/gateways", requireAuth, (req, res) => {
+  res.json(getGatewayConfig());
+});
+
+/* Update gateway config (admin) */
+app.put("/api/admin/payment/gateways", requireAuth, (req, res) => {
+  const b = req.body || {};
+  const flags = ["pg_zarinpal_enabled", "pg_zarinpal_sandbox", "pg_card_enabled"];
+  const texts = [
+    "pg_zarinpal_merchant", "pg_card_number", "pg_card_holder",
+    "pg_card_bank", "pg_card_sheba", "pg_card_desc"
+  ];
+
+  for (const k of flags) if (b[k] !== undefined) setSetting(k, b[k] ? "1" : "0");
+
+  for (const k of texts) {
+    if (b[k] === undefined) continue;
+    let v = String(b[k] || "").trim();
+    if (k === "pg_card_number") v = v.replace(/\D/g, "").slice(0, 16);
+    if (k === "pg_zarinpal_merchant") v = v.trim();
+    setSetting(k, v);
+  }
+
+  res.json({ ok: true, config: getGatewayConfig() });
+});
+
+/* Order payment details incl. receipt (admin) */
+app.get("/api/admin/orders/:id/payment", requireAuth, (req, res) => {
+  const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(Number(req.params.id));
+  if (!order) return res.status(404).json({ error: "سفارش پیدا نشد" });
+  const pay = db
+    .prepare("SELECT * FROM order_payments WHERE order_id = ?")
+    .get(Number(req.params.id));
+  res.json({ order: { id: order.id, ref: order.ref, total: order.total, status: order.status }, payment: pay || null });
+});
+
+/* Admin manually marks a card payment as paid */
+app.put("/api/admin/orders/:id/verify", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(id);
+  if (!order) return res.status(404).json({ error: "سفارش پیدا نشد" });
+  db.prepare(
+    "UPDATE order_payments SET status='paid', paid_at=CURRENT_TIMESTAMP WHERE order_id=?"
+  ).run(id);
+  db.prepare("UPDATE orders SET status='paid' WHERE id=?").run(id);
   res.json({ ok: true });
 });
 

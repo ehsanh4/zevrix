@@ -560,6 +560,91 @@ html[dir="ltr"] .drawer{inset-inline-end:0;transform:translateX(100%)}
 .cart-total b{font-size:19px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .cart-note{text-align:center;font-size:12px;color:var(--muted-2);margin-top:2px}
 
+/* ---------- Payment modal ---------- */
+.modal-backdrop{position:fixed;inset:0;z-index:200;background:rgba(3,5,10,.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.pay-modal{width:100%;max-width:520px;max-height:90vh;overflow:auto;background:var(--bg-2,#0d1120);border:1px solid var(--line);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+.modal-head h3{font-size:16px;font-weight:800}
+.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.modal-foot{padding:0 20px 18px;display:flex;gap:10px}
+.icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;font-size:15px;display:grid;place-items:center;flex:none}
+.icon-btn:hover{background:rgba(255,255,255,.07)}
+
+.pay-methods{display:flex;flex-direction:column;gap:10px}
+.pay-method{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;cursor:pointer;transition:.2s;background:rgba(255,255,255,.02)}
+.pay-method:hover{border-color:rgba(109,93,252,.5)}
+.pay-method.selected{border-color:#6d5dfc;background:rgba(109,93,252,.1);box-shadow:0 0 0 1px #6d5dfc inset}
+.pay-method input{display:none}
+.pay-method__radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--muted-2,#555);flex:none;position:relative;transition:.2s}
+.pay-method.selected .pay-method__radio{border-color:#6d5dfc}
+.pay-method.selected .pay-method__radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:linear-gradient(135deg,#6d5dfc,#00d4ff)}
+.pay-method__body{display:flex;flex-direction:column;gap:2px}
+.pay-method__name{font-weight:700;font-size:14px}
+.pay-method__desc{font-size:12px;color:var(--muted-2,#9aa3b5)}
+
+.pay-card-info{display:none;flex-direction:column;gap:8px;border:1px dashed var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.02)}
+.pay-card-info.show{display:flex}
+.pay-card-info h4{font-size:14px;font-weight:800;margin-bottom:4px}
+.pay-row{display:flex;align-items:center;gap:10px;font-size:13px}
+.pay-row>span{color:var(--muted-2,#9aa3b5);min-width:74px;font-size:12px}
+.pay-row>b{flex:1;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.pay-copy{flex:none;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:11px;cursor:pointer;font-family:inherit}
+.pay-copy:hover{background:rgba(255,255,255,.08)}
+.pay-upload{margin-top:10px;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.pay-upload .field{display:flex;flex-direction:column;gap:5px}
+.pay-upload .field label{font-size:11px;color:var(--muted-2,#9aa3b5)}
+.pay-upload input[type=text],
+.pay-upload input[type=file]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font-family:inherit;font-size:13px}
+.pay-upload input[type=file]{padding:8px;font-size:12px}
+
+/* ---------- Payment methods ---------- */
+.pay-methods{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.pay-method{
+  display:flex;align-items:flex-start;gap:12px;width:100%;text-align:right;
+  padding:13px 14px;border-radius:14px;cursor:pointer;
+  background:rgba(255,255,255,.035);border:1px solid var(--line);
+  transition:border-color .2s,background .2s,transform .2s;
+  font-family:inherit;color:inherit
+}
+.pay-method:hover{background:rgba(255,255,255,.06);transform:translateY(-1px)}
+.pay-method.selected{border-color:var(--accent);background:rgba(109,93,252,.12)}
+.pay-method input{display:none}
+.pay-method__radio{
+  width:19px;height:19px;flex:none;border-radius:50%;margin-top:2px;
+  border:2px solid var(--muted-2);display:grid;place-items:center;transition:.2s
+}
+.pay-method.selected .pay-method__radio{border-color:var(--accent)}
+.pay-method.selected .pay-method__radio::after{
+  content:"";width:9px;height:9px;border-radius:50%;background:var(--grad)
+}
+.pay-method__body{flex:1;min-width:0}
+.pay-method__name{font-weight:700;font-size:14px;margin-bottom:3px}
+.pay-method__desc{font-size:12px;color:var(--muted-2);line-height:1.6}
+.pay-card-info{
+  display:none;margin-top:12px;padding:14px;border-radius:14px;
+  background:rgba(255,255,255,.04);border:1px dashed var(--line)
+}
+.pay-card-info.show{display:block}
+.pay-card-info h4{font-size:13px;margin-bottom:10px;color:var(--muted-2)}
+.pay-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;font-size:13px}
+.pay-row:not(:last-child){border-bottom:1px solid rgba(255,255,255,.05)}
+.pay-row span{color:var(--muted-2)}
+.pay-row b{font-variant-numeric:tabular-nums;letter-spacing:.4px}
+.pay-copy{
+  flex:none;background:rgba(255,255,255,.07);border:1px solid var(--line);
+  color:var(--muted);border-radius:8px;padding:3px 9px;font-size:11px;
+  font-family:inherit;cursor:pointer;transition:.2s
+}
+.pay-copy:hover{color:var(--text);background:rgba(255,255,255,.13)}
+.pay-upload{margin-top:12px}
+.pay-upload .field{margin-bottom:10px}
+.pay-upload label{display:block;font-size:12px;color:var(--muted-2);margin-bottom:6px}
+.pay-upload input[type=text],
+.pay-upload input[type=file]{width:100%}
+.pay-upload input[type=file]{font-size:12px;color:var(--muted-2)}
+.pay-upload .btn{width:100%;margin-top:4px}
+
 /* Auth */
 .auth{padding:24px;display:flex;flex-direction:column;gap:16px}
 .auth__field{display:flex;flex-direction:column;gap:7px}

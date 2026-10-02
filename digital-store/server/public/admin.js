@@ -54,6 +54,7 @@ const VIEW_TITLES = {
   dashboard: "داشبورد",
   products: "مدیریت محصولات",
   orders: "سفارش‌ها",
+  gateways: "درگاه پرداخت",
   settings: "تنظیمات"
 };
 
@@ -131,6 +132,7 @@ async function go(view) {
     if (view === "dashboard") await renderDashboard();
     if (view === "products") await renderProducts();
     if (view === "orders") await renderOrders();
+    if (view === "gateways") await renderGateways();
     if (view === "settings") await renderSettings();
   } catch (err) {
     content.innerHTML = `<div class="empty"><div class="e-ico">⚠️</div><p>${esc(err.message)}</p></div>`;
@@ -572,13 +574,14 @@ async function renderOrders() {
           <thead>
             <tr>
               <th>کد سفارش</th><th>مشتری</th><th>آیتم‌ها</th><th>مبلغ</th>
-              <th>تاریخ</th><th>وضعیت</th><th></th>
+              <th>تاریخ</th><th>پرداخت</th><th>وضعیت</th><th></th>
             </tr>
           </thead>
           <tbody>
             ${ORDERS.map((o) => {
               const st = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
               const items = Array.isArray(o.items) ? o.items : [];
+              const methodLabel = o.payMethod === "zarinpal" ? "زرین‌پال" : o.payMethod === "card" ? "کارت به کارت" : "—";
               return `<tr>
                 <td><b style="font-variant-numeric:tabular-nums" dir="ltr">${esc(o.ref)}</b></td>
                 <td>
@@ -593,6 +596,18 @@ async function renderOrders() {
                 </td>
                 <td class="num"><b>${faNum(o.total)}</b> تومان</td>
                 <td class="num" style="white-space:nowrap;color:var(--muted)">${esc(o.created_at)}</td>
+                <td style="white-space:nowrap">
+                  <div style="margin-bottom:4px">${methodLabel}</div>
+                  ${o.payStatus === "paid"
+                    ? `<span class="pill ok">پرداخت شده</span>`
+                    : o.payStatus === "failed"
+                    ? `<span class="pill danger">ناموفق</span>`
+                    : o.payStatus === "pending"
+                    ? `<span class="pill warn">در انتظار</span>`
+                    : `<span class="pill muted">—</span>`}
+                  ${o.refId ? `<div class="p-sub" dir="ltr">کد: ${esc(o.refId)}</div>` : ""}
+                  ${o.receiptUrl ? `<div style="margin-top:4px"><a href="${esc(o.receiptUrl)}" target="_blank" class="btn btn-ghost btn-sm">🧾 رسید</a></div>` : ""}
+                </td>
                 <td>
                   <select data-status="${o.id}" class="search-box" style="width:auto">
                     ${Object.entries(ORDER_STATUS).map(([k, s]) => `
@@ -601,8 +616,14 @@ async function renderOrders() {
                 </td>
                 <td>
                   <div class="row-actions">
+                    ${o.payMethod === "card" && o.payStatus !== "paid"
+                      ? `<button class="icon-btn" data-verify="${o.id}" title="تأیید دستی پرداخت کارتی">✅</button>`
+                      : ""}
                     <button class="icon-btn danger" data-odel="${o.id}" title="حذف">🗑</button>
                   </div>
+                  ${o.receiptUrl
+                    ? `<div style="margin-top:6px"><img src="${esc(o.receiptUrl)}" alt="رسید" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line)" /></div>`
+                    : ""}
                 </td>
               </tr>`;
             }).join("")}
@@ -637,6 +658,173 @@ async function renderOrders() {
       } catch (err) { toast(err.message, true); }
     })
   );
+  $$("[data-verify]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const o = ORDERS.find((x) => x.id === Number(b.dataset.verify));
+      if (!confirm(`پرداخت کارتی سفارش «${o.ref}» تأیید و وضعیت به «پرداخت شده» تغییر کند؟`)) return;
+      try {
+        await api(`/api/admin/orders/${o.id}/verify`, { method: "PUT" });
+        toast("پرداخت تأیید شد ✓");
+        renderOrders();
+        refreshBadge();
+      } catch (err) { toast(err.message, true); }
+    })
+  );
+}
+
+/* ============================================================
+   PAYMENT GATEWAYS
+   ============================================================ */
+const PG_LABELS = {
+  zarinpal: "زرین‌پال",
+  card: "کارت به کارت"
+};
+
+async function renderGateways() {
+  const cfg = await api("/api/admin/payment/gateways");
+
+  const on = (k) => (cfg[k] === "1" || cfg[k] === true);
+
+  $("#content").innerHTML = `
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>💳 درگاه پرداخت زرین‌پال</h3>
+        <div class="spacer"></div>
+        <span class="pill ${on("pg_zarinpal_enabled") ? "ok" : "muted"}">
+          ${on("pg_zarinpal_enabled") ? "فعال" : "غیرفعال"}
+        </span>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>فعال‌سازی درگاه زرین‌پال</b><span>پرداخت آنلاین از طریق درگاه زرین‌پال</span></div>
+        <label class="switch">
+          <input type="checkbox" id="gwZarinpalEnabled" ${on("pg_zarinpal_enabled") ? "checked" : ""} />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>کد مرچنت (Merchant ID)</b><span>کد اختصاصی درگاه شما در زرین‌پال — از پنل زرین‌پال قابل دریافت است</span></div>
+        <input class="search-box" id="gwMerchant" dir="ltr" placeholder="00000000-0000-0000-0000-000000000000" value="${esc(cfg.pg_zarinpal_merchant || "")}" style="width:100%;max-width:340px" />
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>حالت تست (Sandbox)</b><span>برای آزمایش درگاه بدون پرداخت واقعی — روی سایت اصلی غیرفعال باشد</span></div>
+        <label class="switch">
+          <input type="checkbox" id="gwSandbox" ${on("pg_zarinpal_sandbox") ? "checked" : ""} />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>نحوه کار</b><span>۱) مشتری روی «پرداخت آنلاین» کلیک می‌کند → ۲) به درگاه زرین‌پال هدایت می‌شود → ۳) پس از پرداخت موفق، سفارش خودکار «پرداخت شده» می‌شود.</span></div>
+        <span class="pill info">اتوماتیک</span>
+      </div>
+    </div>
+
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>🏦 پرداخت کارت به کارت</h3>
+        <div class="spacer"></div>
+        <span class="pill ${on("pg_card_enabled") ? "ok" : "muted"}">
+          ${on("pg_card_enabled") ? "فعال" : "غیرفعال"}
+        </span>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>فعال‌سازی کارت به کارت</b><span>مشتری مبلغ را به کارت زیر واریز کرده و رسید را آپلود می‌کند</span></div>
+        <label class="switch">
+          <input type="checkbox" id="gwCardEnabled" ${on("pg_card_enabled") ? "checked" : ""} />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="set-item">
+        <div class="card-grid">
+          <div class="field">
+            <label>شماره کارت</label>
+            <input class="search-box" id="gwCardNumber" dir="ltr" inputmode="numeric" placeholder="۱۶ رقم" value="${esc(cfg.pg_card_number || "")}" style="width:100%" />
+          </div>
+          <div class="field">
+            <label>نام صاحب کارت</label>
+            <input class="search-box" id="gwCardHolder" placeholder="مثلاً: علی رضایی" value="${esc(cfg.pg_card_holder || "")}" style="width:100%" />
+          </div>
+          <div class="field">
+            <label>نام بانک</label>
+            <input class="search-box" id="gwCardBank" placeholder="مثلاً: بانک ملت" value="${esc(cfg.pg_card_bank || "")}" style="width:100%" />
+          </div>
+          <div class="field">
+            <label>شماره شبا</label>
+            <input class="search-box" id="gwCardSheba" dir="ltr" placeholder="IR..." value="${esc(cfg.pg_card_sheba || "")}" style="width:100%" />
+          </div>
+        </div>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>توضیحات اضافی برای مشتری</b><span>مثلاً: «لطفاً پس از واریز، رسید را تا ۲۴ ساعت آپلود کنید»</span></div>
+        <input class="search-box" id="gwCardDesc" placeholder="توضیحات…" value="${esc(cfg.pg_card_desc || "")}" style="width:100%" />
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>نحوه کار</b><span>مشتری شماره کارت را می‌بیند → واریز می‌کند → عکس/PDF رسید را آپلود می‌کند → شما در بخش «سفارش‌ها» رسید را بررسی کرده و پرداخت را تأیید می‌کنید.</span></div>
+        <span class="pill warn">تأیید دستی</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="gwSave">💾 ذخیره تنظیمات درگاه</button>
+      <span id="gwHint" style="color:var(--muted);font-size:13px"></span>
+    </div>`;
+
+  const hint = (msg, err) => {
+    const h = $("#gwHint");
+    h.textContent = msg;
+    h.style.color = err ? "var(--danger,#ff5c7a)" : "var(--muted)";
+  };
+
+  /* live-format card number in groups of 4 */
+  const cardInput = $("#gwCardNumber");
+  cardInput.addEventListener("input", () => {
+    const digits = cardInput.value.replace(/\D/g, "").slice(0, 16);
+    cardInput.value = digits.replace(/(.{4})/g, "$1 ").trim();
+  });
+
+  $("#gwSave").addEventListener("click", async () => {
+    const btn = $("#gwSave");
+    btn.disabled = true;
+    btn.textContent = "در حال ذخیره…";
+    try {
+      const merchant = $("#gwMerchant").value.trim();
+      const cardDigits = cardInput.value.replace(/\D/g, "");
+      if ($("#gwZarinpalEnabled").checked && !merchant) {
+        hint("برای فعال‌سازی زرین‌پال، کد مرچنت را وارد کنید", true);
+        btn.disabled = false;
+        btn.textContent = "💾 ذخیره تنظیمات درگاه";
+        return;
+      }
+      if ($("#gwCardEnabled").checked && cardDigits.length !== 16) {
+        hint("شماره کارت باید ۱۶ رقم باشد", true);
+        btn.disabled = false;
+        btn.textContent = "💾 ذخیره تنظیمات درگاه";
+        return;
+      }
+      await api("/api/admin/payment/gateways", {
+        method: "PUT",
+        body: {
+          pg_zarinpal_enabled: $("#gwZarinpalEnabled").checked,
+          pg_zarinpal_merchant: merchant,
+          pg_zarinpal_sandbox: $("#gwSandbox").checked,
+          pg_card_enabled: $("#gwCardEnabled").checked,
+          pg_card_number: cardDigits,
+          pg_card_holder: $("#gwCardHolder").value.trim(),
+          pg_card_bank: $("#gwCardBank").value.trim(),
+          pg_card_sheba: $("#gwCardSheba").value.trim(),
+          pg_card_desc: $("#gwCardDesc").value.trim()
+        }
+      });
+      toast("تنظیمات درگاه پرداخت ذخیره شد ✓");
+      hint("");
+      renderGateways();
+    } catch (err) {
+      toast(err.message, true);
+      hint(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "💾 ذخیره تنظیمات درگاه";
+    }
+  });
 }
 
 /* ============================================================

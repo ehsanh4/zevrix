@@ -74,11 +74,38 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+/* Payment method chosen by the customer at checkout */
+CREATE TABLE IF NOT EXISTS order_payments (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id      INTEGER NOT NULL UNIQUE,
+  method        TEXT NOT NULL,              -- 'zarinpal' | 'card'
+  status        TEXT NOT NULL DEFAULT 'pending', -- pending | paid | failed
+  authority     TEXT,                       -- ZarinPal authority code
+  ref_id        TEXT,                       -- ZarinPal reference id (after verify)
+  receipt_url   TEXT,                       -- uploaded receipt file (card method)
+  payer_note    TEXT,                       -- note from customer (card method)
+  paid_at       DATETIME,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 `);
+
+/* ---------- Payment gateway settings (key/value in `settings`) ----------
+   pg_zarinpal_enabled   : '0' | '1'
+   pg_zarinpal_merchant  : merchant code (UUID)
+   pg_zarinpal_sandbox   : '0' | '1'
+   pg_card_enabled       : '0' | '1'
+   pg_card_number        : 16-digit card number
+   pg_card_holder        : card holder name
+   pg_card_bank          : bank name
+   pg_card_sheba         : IR sheba number
+   pg_card_desc          : extra note shown to customer
+*/
 
 /* ---------- Helpers ---------- */
 export function productFromRow(r) {

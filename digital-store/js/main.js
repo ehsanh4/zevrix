@@ -318,7 +318,267 @@
     }
   }
 
-  /* ---------- Cart ---------- */
+  /* ---------- Payment ---------- */
+  let payMethods = null;
+
+  /* Ask for email in a modal (prompt() is blocked in many browsers) */
+  function askEmail() {
+    return new Promise((resolve) => {
+      const old = $("#emailBackdrop");
+      if (old) old.remove();
+
+      const backdrop = document.createElement("div");
+      backdrop.className = "modal-backdrop";
+      backdrop.id = "emailBackdrop";
+      backdrop.innerHTML = `
+        <div class="pay-modal" style="max-width:420px">
+          <div class="modal-head">
+            <h3>📧 ${t("toast.needEmail")}</h3>
+            <button class="icon-btn" id="emailClose">✕</button>
+          </div>
+          <form id="emailForm">
+            <div class="modal-body">
+              <div class="field">
+                <input type="email" id="emailInput" dir="ltr" placeholder="name@example.com" required
+                       style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font-family:inherit" />
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button type="submit" class="btn btn--primary btn--block">${t("cart.checkout")}</button>
+            </div>
+          </form>
+        </div>`;
+
+      document.body.appendChild(backdrop);
+      document.body.classList.add("no-scroll");
+      const input = $("#emailInput", backdrop);
+      input.focus();
+
+      const close = (val) => {
+        backdrop.remove();
+        document.body.classList.remove("no-scroll");
+        resolve(val);
+      };
+
+      $("#emailClose", backdrop).addEventListener("click", () => close(null));
+      backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) close(null);
+      });
+
+      $("#emailForm", backdrop).addEventListener("submit", (e) => {
+        e.preventDefault();
+        const v = input.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+          toast(t("toast.needEmail"), "err");
+          input.focus();
+          return;
+        }
+        close(v);
+      });
+    });
+  }
+
+  async function loadPayMethods() {
+    if (payMethods) return payMethods;
+    try {
+      const res = await fetch("/api/payment/methods");
+      payMethods = await res.json();
+    } catch { payMethods = null; }
+    return payMethods;
+  }
+
+  function toFaDigits(s) {
+    return String(s || "").replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+  }
+
+  function copyText(text, btn) {
+    const done = () => {
+      const old = btn.textContent;
+      btn.textContent = "✓";
+      setTimeout(() => { btn.textContent = old; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, btn, done));
+    } else fallbackCopy(text, btn, done);
+  }
+
+  function fallbackCopy(text, btn, done) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch { /* ignore */ }
+    ta.remove();
+  }
+
+  async function openPayment(ref, total) {
+    const methods = await loadPayMethods();
+    const zp = methods && methods.zarinpal;
+    const card = methods && methods.card;
+
+    if (!zp || !zp.enabled) delete methods.zarinpal;
+    if (!card || !card.enabled) delete methods.card;
+
+    if (!methods || (!methods.zarinpal && !methods.card)) {
+      toast(t("pay.noMethod"), "err");
+      return;
+    }
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.id = "payBackdrop";
+    backdrop.innerHTML = `
+      <div class="pay-modal">
+          <h3>💳 ${t("pay.title")}</h3>
+          <button class="icon-btn" id="payClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="pay-methods" id="payMethods"></div>
+          <div class="pay-card-info" id="payCardInfo"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn--primary btn--block" id="payAction" disabled>…</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(backdrop);
+    document.body.classList.add("no-scroll");
+
+    const rows = $("#payMethods");
+    const cardInfo = $("#payCardInfo");
+    const actionBtn = $("#payAction");
+    let selected = null;
+
+    rows.innerHTML = [
+      methods.zarinpal ? { key: "zarinpal", name: t("pay.zarinpal"), desc: t("pay.zarinpalDesc"), ico: "🌐" } : null,
+      methods.card ? { key: "card", name: t("pay.card"), desc: t("pay.cardDesc"), ico: "🏦" } : null
+    ].filter(Boolean).map((m) => `
+      <label class="pay-method" data-method="${m.key}">
+        <input type="radio" name="payMethod" value="${m.key}" />
+        <span class="pay-method__radio"></span>
+        <span class="pay-method__body">
+          <span class="pay-method__name">${m.ico} ${esc(m.name)}</span>
+          <span class="pay-method__desc">${esc(m.desc)}</span>
+        </span>
+      </label>`).join("");
+
+    function selectMethod(key) {
+      selected = key;
+      $$(".pay-method", backdrop).forEach((el) =>
+        el.classList.toggle("selected", el.dataset.method === key)
+      );
+      if (key === "card" && methods.card) {
+        const c = methods.card;
+        cardInfo.classList.add("show");
+        cardInfo.innerHTML = `
+          <h4>${t("pay.cardHolder")}: ${esc(c.holder || "—")}</h4>
+          ${[
+            ["pay.cardNumber", c.number, 16],
+            ["pay.cardBank", c.bank, null],
+            ["pay.cardSheba", c.sheba, null]
+          ].filter(([, v]) => v).map(([label, v]) => `
+            <div class="pay-row">
+              <span>${t(label)}</span>
+              <b dir="ltr">${esc(v)}</b>
+              <button type="button" class="pay-copy" data-copy="${esc(v)}">کپی</button>
+            </div>`).join("")}
+          ${c.desc ? `<div class="pay-row"><span>توضیحات</span><b style="font-weight:500;max-width:60%;text-align:left" dir="rtl">${esc(c.desc)}</b></div>` : ""}
+          <div class="pay-upload">
+            <div class="field">
+              <label>${t("pay.receiptHint")}</label>
+              <input type="file" id="receiptFile" accept="image/png,image/jpeg,image/webp,application/pdf" />
+            </div>
+            <div class="field">
+              <label>${t("pay.receiptNote")}</label>
+              <input type="text" id="receiptNote" placeholder="…" />
+            </div>
+            <button class="btn btn--ghost" id="receiptSend">${t("pay.uploadReceiptBtn")} ↑</button>
+          </div>`;
+        actionBtn.style.display = "none";
+        $("#receiptSend").addEventListener("click", () => uploadReceipt(ref));
+        $$("[data-copy]", cardInfo).forEach((b) =>
+          b.addEventListener("click", () => copyText(b.dataset.copy, b))
+        );
+      } else {
+        cardInfo.classList.remove("show");
+        cardInfo.innerHTML = "";
+        actionBtn.style.display = "block";
+        actionBtn.textContent = t("pay.payNow");
+      }
+    }
+
+    $$(".pay-method", backdrop).forEach((el) =>
+      el.addEventListener("click", () => selectMethod(el.dataset.method))
+    );
+
+    const first = $(".pay-method", backdrop);
+    if (first) selectMethod(first.dataset.method);
+
+    $("#payClose").addEventListener("click", closePayment);
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) closePayment();
+    });
+
+    actionBtn.addEventListener("click", () => {
+      if (selected === "zarinpal") startZarinpal(ref, actionBtn);
+    });
+  }
+
+  function closePayment() {
+    const b = $("#payBackdrop");
+    if (b) b.remove();
+    document.body.classList.remove("no-scroll");
+  }
+
+  async function startZarinpal(ref, btn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = t("pay.redirecting");
+    try {
+      const res = await fetch("/api/payment/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ref, method: "zarinpal" })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "error");
+      window.location.href = data.payUrl;
+    } catch (e) {
+      toast(t("pay.payFail"), "err");
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  async function uploadReceipt(ref) {
+    const fileInput = $("#receiptFile");
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if (!file) return toast(t("pay.uploadReceipt"), "err");
+    const btn = $("#receiptSend");
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "...";
+    try {
+      const fd = new FormData();
+      fd.append("receipt", file);
+      fd.append("ref", ref);
+      fd.append("note", ($("#receiptNote") || {}).value || "");
+      const res = await fetch("/api/payment/receipt", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "error");
+      toast(t("pay.receiptOk"), "ok");
+      closePayment();
+    } catch (e) {
+      toast(t("pay.receiptFail"), "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  /* ---------- End payment ---------- */
   function saveCart() {
     localStorage.setItem("ds-cart", JSON.stringify(state.cart));
   }
@@ -670,11 +930,9 @@
         toast(t("toast.emptyCart"));
         return;
       }
-      const email = prompt(t("toast.needEmail"), "");
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-        if (email !== null) toast(t("toast.needEmail"));
-        return;
-      }
+      const email = await askEmail();
+      if (!email) return;
+
       const btn = $("#checkoutBtn");
       const original = btn.textContent;
       btn.textContent = "...";
@@ -696,7 +954,7 @@
         saveCart();
         updateCartUI();
         closeAll();
-        toast(t("toast.orderOk") + " " + data.ref, "ok");
+        openPayment(data.ref, total);
       } catch (e) {
         toast(t("toast.orderFail"), "err");
       } finally {
