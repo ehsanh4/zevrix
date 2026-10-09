@@ -737,11 +737,31 @@
       $$("[data-remove]", items).forEach((b) =>
         b.addEventListener("click", () => removeFromCart(b.dataset.remove))
       );
-      /* Cart changed → the applied coupon must be re-validated. */
+      /* Cart changed → re-validate the applied coupon against the new
+         subtotal so the shown discount never goes stale. */
       if (state.coupon) {
         const sub = cartSubtotal();
-        if (sub <= 0) state.coupon = null;
-        renderCoupon(sub);
+        if (sub <= 0) {
+          state.coupon = null;
+          renderCoupon(0);
+        } else {
+          /* Silent re-preview: keeps the amount in sync with the cart. */
+          fetch("/api/discount/preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code: state.coupon.code,
+              items: state.cart.map((i) => ({ id: i.id, qty: i.qty }))
+            })
+          })
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.ok) state.coupon.amount = data.amount;
+              else state.coupon = null;
+              renderCoupon(cartSubtotal());
+            })
+            .catch(() => renderCoupon(cartSubtotal()));
+        }
       } else {
         renderCoupon(total);
       }
