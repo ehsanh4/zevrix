@@ -20,7 +20,13 @@ export const PG_KEYS = [
   "smtp_port",
   "smtp_user",
   "smtp_pass",
-  "smtp_from"
+  "smtp_from",
+  /* ShopVPN integration (src/vpnapi.js) */
+  "vpn_enabled",
+  "vpn_api_url",
+  "vpn_api_token",
+  "vpn_cat",
+  "vpn_sync_interval"
 ];
 
 const DEFAULTS = {
@@ -39,7 +45,12 @@ const DEFAULTS = {
   smtp_port: "587",
   smtp_user: "",
   smtp_pass: "",
-  smtp_from: ""
+  smtp_from: "",
+  vpn_enabled: "0",
+  vpn_api_url: "",
+  vpn_api_token: "",
+  vpn_cat: "vpn",
+  vpn_sync_interval: "30"
 };
 
 /** Read one setting (falls back to default) */

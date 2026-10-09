@@ -259,7 +259,7 @@
 
   /* ---------- Product modal ---------- */
   function openProductModal(id) {
-    const p = PRODUCTS.find((x) => x.id === Number(id));
+    const p = PRODUCTS.find((x) => x.id === id || x.id === Number(id));
     if (!p) return;
     const off = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
 
@@ -583,7 +583,7 @@
     localStorage.setItem("ds-cart", JSON.stringify(state.cart));
   }
   function addToCart(id) {
-    const p = PRODUCTS.find((x) => x.id === Number(id));
+    const p = PRODUCTS.find((x) => x.id === id || x.id === Number(id));
     if (!p) return;
     const found = state.cart.find((i) => i.id === p.id);
     if (found) found.qty += 1;

@@ -55,6 +55,7 @@ const VIEW_TITLES = {
   products: "مدیریت محصولات",
   orders: "سفارش‌ها",
   gateways: "درگاه پرداخت",
+  vpn: "اتصال پنل VPN",
   settings: "تنظیمات"
 };
 
@@ -133,6 +134,7 @@ async function go(view) {
     if (view === "products") await renderProducts();
     if (view === "orders") await renderOrders();
     if (view === "gateways") await renderGateways();
+    if (view === "vpn") await renderVpn();
     if (view === "settings") await renderSettings();
   } catch (err) {
     content.innerHTML = `<div class="empty"><div class="e-ico">⚠️</div><p>${esc(err.message)}</p></div>`;
@@ -1084,6 +1086,201 @@ async function renderGateways() {
     } finally {
       btn.disabled = false;
       btn.textContent = "💾 ذخیره تنظیمات درگاه";
+    }
+  });
+}
+
+/* ============================================================
+   SHOPVPN INTEGRATION
+   ============================================================ */
+async function renderVpn() {
+  const cfg = await api("/api/admin/vpn/config");
+  const on = (k) => cfg[k] === "1" || cfg[k] === true;
+
+  const lastSync = cfg.vpn_last_sync
+    ? new Date(cfg.vpn_last_sync).toLocaleString("fa-IR")
+    : "هنوز همگام‌سازی نشده";
+
+  $("#content").innerHTML = `
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>🌐 اتصال به پنل ShopVPN</h3>
+        <div class="spacer"></div>
+        <span class="pill ${on("vpn_enabled") ? "ok" : "muted"}">
+          ${on("vpn_enabled") ? "فعال" : "غیرفعال"}
+        </span>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>فعال‌سازی یکپارچه‌سازی</b><span>وقتی فعال باشد، محصولات پنل VPN به‌صورت خودکار همگام شده و در فروشگاه نمایش داده می‌شوند.</span></div>
+        <label class="switch">
+          <input type="checkbox" id="vpnEnabled" ${on("vpn_enabled") ? "checked" : ""} />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>آدرس API پنل</b><span>آدرس کامل پنل ShopVPN شما — مثال: <code dir="ltr">https://vpn.example.com</code></span></div>
+        <input class="search-box" id="vpnUrl" dir="ltr" placeholder="https://your-shopvpn-panel.com" value="${esc(cfg.vpn_api_url || "")}" style="width:100%;max-width:420px" />
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>توکن API</b><span>با دستور <code dir="ltr">/token2</code> در ربات ادمین پنل VPN ساخته می‌شود — اسکوپ <code dir="ltr">read</code> کافی است.</span></div>
+        <input class="search-box" id="vpnToken" dir="ltr" placeholder="token..." value="${esc(cfg.vpn_api_token || "")}" style="width:100%;max-width:420px" />
+      </div>
+      <div class="card-grid" style="margin-top:4px">
+        <div class="field">
+          <label>دسته‌بندی فروشگاه</label>
+          <select class="search-box" id="vpnCat" style="width:100%">
+            ${CATEGORIES.map(
+              (c) => `<option value="${esc(c.id)}" ${c.id === (cfg.vpn_cat || "vpn") ? "selected" : ""}>${esc(c.name.fa)}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>فاصله همگام‌سازی (دقیقه)</label>
+          <input class="search-box" id="vpnInterval" dir="ltr" inputmode="numeric" placeholder="30" value="${esc(cfg.vpn_sync_interval || "30")}" style="width:100%" />
+        </div>
+      </div>
+      <div class="set-item">
+        <div class="s-label"><b>نحوه راه‌اندازی</b><span>۱) آدرس پنل و توکن را وارد کنید → ۲) روی «تست اتصال» بزنید → ۳) ذخیره کنید → ۴) روی «همگام‌سازی» بزنید تا محصولات وارد شوند. پس از آن هر ${esc(cfg.vpn_sync_interval || "30")} دقیقه به‌صورت خودکار تازه می‌شوند.</span></div>
+        <span class="pill info">آخرین همگام‌سازی: ${lastSync}</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary" id="vpnSave">💾 ذخیره تنظیمات</button>
+        <button class="btn btn-ghost" id="vpnTest">🔌 تست اتصال</button>
+        <button class="btn btn-ghost" id="vpnSync">🔄 همگام‌سازی محصولات</button>
+        <span id="vpnHint" style="color:var(--muted);font-size:13px"></span>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>📦 محصولات واردشده از پنل VPN</h3>
+        <div class="spacer"></div>
+        <span class="pill ${cfg.vpn_last_status === "ok" ? "ok" : cfg.vpn_last_status === "error" ? "warn" : "muted"}">
+          ${cfg.vpn_last_count != null ? faNum(cfg.vpn_last_count) + " محصول" : "خالی"}
+        </span>
+      </div>
+      <div id="vpnProducts">در حال بارگذاری…</div>
+    </div>`;
+
+  const hint = (msg, err) => {
+    const h = $("#vpnHint");
+    h.textContent = msg;
+    h.style.color = err ? "var(--danger,#ff5c7a)" : "var(--muted)";
+  };
+
+  /* Load cached products */
+  const loadProducts = async () => {
+    try {
+      const rows = await api("/api/admin/vpn/products");
+      const box = $("#vpnProducts");
+      if (!rows.length) {
+        box.innerHTML = `<div class="empty"><div class="e-ico">📭</div><p>هنوز محصولی وارد نشده — روی «همگام‌سازی محصولات» بزنید.</p></div>`;
+        return;
+      }
+      box.innerHTML = `
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th>نام محصول</th><th>دسته پنل</th><th>قیمت</th><th>مدت</th><th>تحویل خودکار</th><th>وضعیت</th>
+            </tr></thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `<tr>
+                    <td><b>${esc(r.name)}</b></td>
+                    <td>${esc(r.category_name || "—")}</td>
+                    <td>${r.price ? faNum(r.price) + " تومان" : "—"}</td>
+                    <td>${r.duration_days ? faNum(r.duration_days) + " روز" : "—"}</td>
+                    <td>${r.is_auto_provision ? '<span class="pill ok">آنی</span>' : '<span class="pill muted">دستی</span>'}</td>
+                    <td>${r.is_active ? '<span class="pill ok">فعال</span>' : '<span class="pill muted">غیرفعال</span>'}</td>
+                  </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`;
+    } catch (err) {
+      $("#vpnProducts").innerHTML = `<div class="empty"><div class="e-ico">⚠️</div><p>${esc(err.message)}</p></div>`;
+    }
+  };
+  loadProducts();
+
+  /* Test connection */
+  $("#vpnTest").addEventListener("click", async () => {
+    const btn = $("#vpnTest");
+    btn.disabled = true;
+    btn.textContent = "در حال تست…";
+    hint("");
+    try {
+      const data = await api("/api/admin/vpn/test", {
+        method: "POST",
+        body: {
+          url: $("#vpnUrl").value.trim(),
+          token: $("#vpnToken").value.trim()
+        }
+      });
+      toast(`اتصال برقرار شد ✓ — ${faNum(data.count)} محصول در دسترس`);
+      hint(`${faNum(data.count)} محصول در پنل پیدا شد`);
+    } catch (err) {
+      toast(err.message, true);
+      hint(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🔌 تست اتصال";
+    }
+  });
+
+  /* Sync now */
+  $("#vpnSync").addEventListener("click", async () => {
+    const btn = $("#vpnSync");
+    btn.disabled = true;
+    btn.textContent = "در حال همگام‌سازی…";
+    hint("");
+    try {
+      const data = await api("/api/admin/vpn/sync", { method: "POST" });
+      toast(`${faNum(data.count)} محصول همگام‌سازی شد ✓`);
+      hint(`${faNum(data.count)} محصول به‌روز شد`);
+      renderVpn();
+    } catch (err) {
+      toast(err.message, true);
+      hint(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🔄 همگام‌سازی محصولات";
+    }
+  });
+
+  /* Save */
+  $("#vpnSave").addEventListener("click", async () => {
+    const btn = $("#vpnSave");
+    btn.disabled = true;
+    btn.textContent = "در حال ذخیره…";
+    try {
+      if ($("#vpnEnabled").checked && (!$("#vpnUrl").value.trim() || !$("#vpnToken").value.trim())) {
+        hint("برای فعال‌سازی، آدرس پنل و توکن را وارد کنید", true);
+        btn.disabled = false;
+        btn.textContent = "💾 ذخیره تنظیمات";
+        return;
+      }
+      await api("/api/admin/vpn/config", {
+        method: "PUT",
+        body: {
+          vpn_enabled: $("#vpnEnabled").checked,
+          vpn_api_url: $("#vpnUrl").value.trim(),
+          vpn_api_token: $("#vpnToken").value.trim(),
+          vpn_cat: $("#vpnCat").value,
+          vpn_sync_interval: $("#vpnInterval").value.trim()
+        }
+      });
+      toast("تنظیمات اتصال VPN ذخیره شد ✓");
+      hint("");
+      renderVpn();
+    } catch (err) {
+      toast(err.message, true);
+      hint(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "💾 ذخیره تنظیمات";
     }
   });
 }

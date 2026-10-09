@@ -37,6 +37,18 @@ import {
 } from "./src/telegram.js";
 import { deliverOrder, orderDelivered } from "./src/fulfillment.js";
 import { sendMail, smtpConfigured, SMTP_KEYS } from "./src/mail.js";
+import {
+  VPN_KEYS,
+  vpnEnabled,
+  vpnConfigured,
+  getVpnConfig,
+  getPublicVpnConfig,
+  vpnRequest,
+  vpnStoreProducts,
+  syncVpnProducts,
+  recordSyncError,
+  vpnSyncLoop
+} from "./src/vpnapi.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, ".."); // digital-store/
@@ -74,11 +86,23 @@ app.get("/api/products", (req, res) => {
   const rows = db
     .prepare("SELECT * FROM products WHERE active = 1 ORDER BY created_at DESC")
     .all();
-  res.json(rows.map(productFromRow));
+  const products = rows.map(productFromRow);
+
+  /* Merge in products pulled from the ShopVPN panel (if enabled) */
+  if (vpnEnabled()) products.push(...vpnStoreProducts());
+
+  res.json(products);
 });
 
 /* Single product */
 app.get("/api/products/:id", (req, res) => {
+  /* VPN products have string ids like "vpn-12" */
+  if (String(req.params.id).startsWith("vpn-")) {
+    const p = vpnStoreProducts().find((x) => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: "Not found" });
+    return res.json(p);
+  }
+
   const row = db.prepare("SELECT * FROM products WHERE id = ?").get(req.params.id);
   if (!row) return res.status(404).json({ error: "Not found" });
   res.json(productFromRow(row));
@@ -630,8 +654,7 @@ app.put("/api/admin/payment/gateways", requireAuth, (req, res) => {
 
 /* Test the Telegram bot (admin) — accepts values from the form so it works
    even before saving */
-app.post("/api/admin/payment/telegram/test", requireAuth, async (req, res) => {
-  const token = (req.body && req.body.token) || getSetting("tg_bot_token");
+app.post("/api/admin/payment/telegram/test", requireAuth, async (req, res) => {  const token = (req.body && req.body.token) || getSetting("tg_bot_token");
   const chatId = (req.body && req.body.chat_id) || getSetting("tg_chat_id");
   if (!token || !chatId)
     return res.status(400).json({ ok: false, error: "توکن و شناسه چت را وارد کنید" });
@@ -653,6 +676,78 @@ app.post("/api/admin/payment/telegram/test", requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: "اتصال به تلگرام برقرار نشد" });
   }
+});
+
+/* ============================================================
+   ADMIN — SHOPVPN INTEGRATION
+   ============================================================ */
+
+/* VPN integration config (admin) */
+app.get("/api/admin/vpn/config", requireAuth, (req, res) => {
+  res.json(getVpnConfig());
+});
+
+/* Update VPN integration config (admin) */
+app.put("/api/admin/vpn/config", requireAuth, (req, res) => {
+  const b = req.body || {};
+  const flags = ["vpn_enabled"];
+  const texts = ["vpn_api_url", "vpn_api_token", "vpn_cat", "vpn_sync_interval"];
+
+  for (const k of flags) if (b[k] !== undefined) setSetting(k, b[k] ? "1" : "0");
+  for (const k of texts) {
+    if (b[k] === undefined) continue;
+    let v = String(b[k] || "").trim();
+    if (k === "vpn_sync_interval") {
+      const n = parseInt(v, 10);
+      v = String(Math.min(1440, Math.max(5, isNaN(n) ? 30 : n)));
+    }
+    setSetting(k, v);
+  }
+
+  res.json({ ok: true, config: getVpnConfig() });
+});
+
+/* Test the VPN panel connection (admin) — uses form values so it works
+   before saving. Returns the first products as a preview. */
+app.post("/api/admin/vpn/test", requireAuth, async (req, res) => {
+  const url = (req.body && req.body.url) || getSetting("vpn_api_url");
+  const token = (req.body && req.body.token) || getSetting("vpn_api_token");
+  if (!url || !token)
+    return res.status(400).json({ ok: false, error: "آدرس و توکن API را وارد کنید" });
+
+  try {
+    const products = await vpnRequest(
+      "products",
+      { limit: 5, offset: 0 },
+      { url, token }
+    );
+    res.json({
+      ok: true,
+      count: Array.isArray(products) ? products.length : 0,
+      sample: (Array.isArray(products) ? products : []).slice(0, 5)
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/* Sync products from the VPN panel now (admin) */
+app.post("/api/admin/vpn/sync", requireAuth, async (req, res) => {
+  try {
+    const { count } = await syncVpnProducts();
+    res.json({ ok: true, count });
+  } catch (e) {
+    recordSyncError(e.message);
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/* Products currently cached from the panel (admin) */
+app.get("/api/admin/vpn/products", requireAuth, (req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM vpn_products ORDER BY is_active DESC, price ASC")
+    .all();
+  res.json(rows);
 });
 
 /* Order payment details incl. receipt (admin) */
@@ -741,4 +836,7 @@ app.listen(PORT, () => {
   console.log("🚀 ZEVRIX server running:");
   console.log("   🏪 Storefront : http://localhost:" + PORT);
   console.log("   🔐 Admin panel: http://localhost:" + PORT + "/admin");
+
+  /* Start the ShopVPN background sync (no-op until configured) */
+  vpnSyncLoop();
 });

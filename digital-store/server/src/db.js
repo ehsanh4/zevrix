@@ -108,6 +108,22 @@ CREATE TABLE IF NOT EXISTS license_keys (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
   FOREIGN KEY (order_id)   REFERENCES orders(id)  ON DELETE SET NULL
 );
+
+/* Products pulled from the ShopVPN panel via the Integration API.
+   remote_id is the id inside the VPN panel; it never collides with
+   the local products table because storefront ids are vpn-<remote_id>. */
+CREATE TABLE IF NOT EXISTS vpn_products (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  remote_id          INTEGER NOT NULL UNIQUE,
+  name               TEXT NOT NULL,
+  category_name      TEXT NOT NULL DEFAULT '',
+  price              INTEGER NOT NULL DEFAULT 0,
+  duration_days      INTEGER NOT NULL DEFAULT 0,
+  description        TEXT NOT NULL DEFAULT '',
+  is_active          INTEGER NOT NULL DEFAULT 1,
+  is_auto_provision  INTEGER NOT NULL DEFAULT 0,
+  updated_at         DATETIME
+);
 `);
 
 /* ---------- Migrations for existing databases ----------
