@@ -918,6 +918,19 @@ html[dir="ltr"] .drawer{inset-inline-end:0;transform:translateX(100%)}
 }
 html[dir="rtl"] .aria-hint{direction:rtl}
 
+/* VPN hero variant (shown on the #/vpn route instead of the store pills) */
+.aria-vpn{max-width:620px}
+.aria-vpn:not([hidden]){animation:ariaRise .6s var(--ease) both}
+.aria-vpn__title{
+  color:#fff;font-weight:900;line-height:1.25;margin-bottom:16px;
+  font-size:clamp(1.7rem,4.6vw,2.7rem);
+}
+.aria-vpn__desc{
+  color:rgba(255,255,255,.8);margin-bottom:26px;
+  font-size:clamp(15px,2.6vw,19px);line-height:1.75;
+}
+.aria-vpn__links{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+
 @media (max-width:860px){
   .aria-hero{min-height:600px;padding-bottom:40px}
   .aria-type{min-height:110px}

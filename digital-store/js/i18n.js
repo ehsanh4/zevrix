@@ -20,6 +20,12 @@ const I18N = {
       mail: "ایمیل:", hint: "برای کاوش، موس را حرکت دهید",
       copied: "کپی شد ✓"
     },
+    ariaVpn: {
+      title: "اینترنت سریع، پایدار و امن",
+      desc: "⚡️ مناسب برای وب‌گردی، شبکه‌های اجتماعی و سرویس‌های آنلاین",
+      bot: "@ZEVRIX_bot",
+      channel: "کانال: @ZEVRIXVPN"
+    },
     brands: { title: "مورد اعتماد برندهای برتر" },
     categories: { tag: "دسته‌بندی‌ها", title: "دسته‌بندی محصولات", sub: "هرچه نیاز دیجیتال دارید، در دسته‌بندی‌های ما پیدا کنید.", count: "محصول" },
     cat: {
@@ -87,6 +93,12 @@ const I18N = {
       p1: "Browse Products", p2: "Special Deals", p3: "Support", p4: "Categories",
       mail: "Reach us:", hint: "Move your mouse to explore",
       copied: "Copied ✓"
+    },
+    ariaVpn: {
+      title: "Fast, stable and secure internet",
+      desc: "⚡️ Perfect for browsing, social media and online services",
+      bot: "@ZEVRIX_bot",
+      channel: "Channel: @ZEVRIXVPN"
     },
     brands: { title: "Trusted by top brands" },
     categories: { tag: "Categories", title: "Product Categories", sub: "Find everything you need in our digital categories.", count: "products" },

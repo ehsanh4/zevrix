@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="css/style.css?v=11" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
 </head>
 <body>
 
@@ -113,27 +113,38 @@
     <div class="aria-hero__scrim" aria-hidden="true"></div>
 
     <div class="aria-hero__inner">
-      <div class="aria-label" data-i18n="aria.label" aria-hidden="true"></div>
-      <p class="aria-type" id="ariaType"></p>
+      <div class="aria-store" id="ariaStore">
+        <div class="aria-label" data-i18n="aria.label" aria-hidden="true"></div>
+        <p class="aria-type" id="ariaType"></p>
 
-      <div class="aria-pills" id="ariaPills">
-        <a href="#products" class="aria-pill" data-i18n="aria.p1">مشاهده محصولات</a>
-        <a href="#deals" class="aria-pill" data-i18n="aria.p2">تخفیف‌های ویژه</a>
-        <a href="#support" class="aria-pill" data-i18n="aria.p3">پشتیبانی</a>
-        <a href="#categories" class="aria-pill" data-i18n="aria.p4">دسته‌بندی‌ها</a>
-        <button type="button" class="aria-pill aria-pill--ghost" id="ariaCopy">
-          <span data-i18n="aria.mail">ایمیل:</span>
-          <span style="text-decoration:underline;text-underline-offset:2px">support@zevrix.com</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
-          </svg>
-        </button>
+        <div class="aria-pills" id="ariaPills">
+          <a href="#products" class="aria-pill" data-i18n="aria.p1">مشاهده محصولات</a>
+          <a href="#deals" class="aria-pill" data-i18n="aria.p2">تخفیف‌های ویژه</a>
+          <a href="#support" class="aria-pill" data-i18n="aria.p3">پشتیبانی</a>
+          <a href="#categories" class="aria-pill" data-i18n="aria.p4">دسته‌بندی‌ها</a>
+          <button type="button" class="aria-pill aria-pill--ghost" id="ariaCopy">
+            <span data-i18n="aria.mail">ایمیل:</span>
+            <span style="text-decoration:underline;text-underline-offset:2px">support@zevrix.com</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+            </svg>
+          </button>
+        </div>
+
+        <p class="aria-hint">
+          <span data-i18n="aria.hint">برای کاوش، موس را حرکت دهید</span>
+          <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd>
+        </p>
       </div>
 
-      <p class="aria-hint">
-        <span data-i18n="aria.hint">برای کاوش، موس را حرکت دهید</span>
-        <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd>
-      </p>
+      <div class="aria-vpn" id="ariaVpn" hidden>
+        <h1 class="aria-vpn__title" data-i18n="ariaVpn.title">اینترنت سریع، پایدار و امن</h1>
+        <p class="aria-vpn__desc" data-i18n="ariaVpn.desc">⚡️ مناسب برای وب‌گردی، شبکه‌های اجتماعی و سرویس‌های آنلاین</p>
+        <div class="aria-vpn__links">
+          <a class="aria-pill" href="https://t.me/ZEVRIX_bot" target="_blank" rel="noopener noreferrer" data-i18n="ariaVpn.bot">@ZEVRIX_bot</a>
+          <a class="aria-pill aria-pill--ghost" href="https://t.me/ZEVRIXVPN" target="_blank" rel="noopener noreferrer" data-i18n="ariaVpn.channel">کانال: @ZEVRIXVPN</a>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -455,9 +466,6 @@
     <div class="modal__box" id="modalBox"></div>
   </div>
 
-  <!-- ===================== VPN PLANS PAGE ===================== -->
-  <main class="vpn-page" id="vpnPage" hidden></main>
-
   <!-- ===================== TOAST ===================== -->
   <div class="toasts" id="toasts"></div>
 
@@ -468,6 +476,6 @@
 
   <script src="js/data.js"></script>
   <script src="js/i18n.js"></script>
-  <script src="js/main.js?v=12"></script>
+  <script src="js/main.js?v=13"></script>
 </body>
 </html>

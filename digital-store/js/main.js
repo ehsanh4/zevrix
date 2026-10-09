@@ -999,6 +999,16 @@
     </article>`;
   }
 
+  /* ---------- A.R.I.A hero: store content vs VPN content ---------- */
+  function setHeroMode(mode) {
+    const store = $("#ariaStore");
+    const vpn = $("#ariaVpn");
+    if (!store || !vpn) return;
+    const isVpn = mode === "vpn";
+    store.hidden = isVpn;
+    vpn.hidden = !isVpn;
+  }
+
   /* ---------- Simple client-side router (home / vpn) ---------- */
   function go(route, opts) {
     state.route = route;
@@ -1009,10 +1019,12 @@
     if (route === "vpn") {
       home.hidden = true;
       vpn.hidden = false;
+      setHeroMode("vpn");
       renderVpnPage();
     } else {
       vpn.hidden = true;
       home.hidden = false;
+      setHeroMode("home");
     }
     /* keep the address bar in sync (silent — no extra history entry) */
     const want = route === "vpn" ? "#/vpn" : "";
