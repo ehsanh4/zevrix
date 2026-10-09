@@ -11,7 +11,8 @@
     filter: "all",
     visible: 8,
     authMode: "login",
-    route: "home"
+    route: "home",
+    coupon: null  /* { code, amount } when a discount is applied */
   };
 
   const $ = (s, r) => (r || document).querySelector(s);
@@ -610,6 +611,88 @@
     toast(t("cart.removed"));
   }
 
+  function cartSubtotal() {
+    return state.cart.reduce((s, i) => {
+      const p = PRODUCTS.find((x) => x.id === i.id);
+      return s + (p ? p.price * i.qty : 0);
+    }, 0);
+  }
+
+  /* Render the coupon box state: applied, error, or idle. */
+  function renderCoupon(subtotal) {
+    const msg = $("#couponMsg");
+    const row = $("#cartDiscountRow");
+    const pay = $("#cartPayableRow");
+    const totalEl = $("#cartTotal");
+
+    if (!state.coupon) {
+      msg.className = "cart-coupon-msg";
+      msg.textContent = "";
+      row.style.display = "none";
+      pay.style.display = "none";
+      totalEl.classList.remove("has-discount");
+      totalEl.textContent = formatPrice(subtotal, state.lang);
+      return;
+    }
+
+    const payable = Math.max(subtotal - state.coupon.amount, 0);
+    totalEl.classList.add("has-discount");
+    totalEl.textContent = formatPrice(subtotal, state.lang);
+    row.style.display = "flex";
+    $("#cartDiscount").textContent = "− " + formatPrice(state.coupon.amount, state.lang);
+    pay.style.display = "flex";
+    $("#cartPayable").textContent = formatPrice(payable, state.lang);
+
+    msg.className = "cart-coupon-msg show ok";
+    msg.innerHTML =
+      `<span>${t("cart.couponOk")} (${esc(state.coupon.code)})</span>` +
+      `<button type="button" id="couponRemove">${t("cart.couponRemove")}</button>`;
+    $("#couponRemove").addEventListener("click", () => {
+      state.coupon = null;
+      renderCoupon(cartSubtotal());
+      toast(t("cart.couponRemove"));
+    });
+  }
+
+  /* Validate a code against the server (preview only — it is consumed
+     only when the order is actually placed). */
+  async function applyCoupon() {
+    const input = $("#couponInput");
+    const code = input.value.trim();
+    if (!code) return;
+
+    const btn = $("#couponApply");
+    const original = btn.textContent;
+    btn.textContent = "...";
+    btn.disabled = true;
+    try {
+      const items = state.cart.map((i) => ({ id: i.id, qty: i.qty }));
+      const res = await fetch("/api/discount/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, items })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || t("toast.couponFail"));
+
+      state.coupon = { code: data.code, amount: data.amount };
+      renderCoupon(cartSubtotal());
+    } catch (e) {
+      state.coupon = null;
+      const msg = $("#couponMsg");
+      msg.className = "cart-coupon-msg show err";
+      msg.textContent = e.message || t("toast.couponFail");
+      renderCoupon(cartSubtotal());
+      /* renderCoupon() clears the message when there is no coupon —
+         re-show the error afterwards. */
+      msg.className = "cart-coupon-msg show err";
+      msg.textContent = e.message || t("toast.couponFail");
+    } finally {
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  }
+
   function updateCartUI(bump) {
     const count = state.cart.reduce((s, i) => s + i.qty, 0);
     const badge = $("#cartCount");
@@ -651,10 +734,17 @@
         })
         .join("");
       $("#cartFoot").style.display = "flex";
-      $("#cartTotal").textContent = formatPrice(total, state.lang);
       $$("[data-remove]", items).forEach((b) =>
         b.addEventListener("click", () => removeFromCart(b.dataset.remove))
       );
+      /* Cart changed → the applied coupon must be re-validated. */
+      if (state.coupon) {
+        const sub = cartSubtotal();
+        if (sub <= 0) state.coupon = null;
+        renderCoupon(sub);
+      } else {
+        renderCoupon(total);
+      }
     }
   }
 
@@ -1028,6 +1118,13 @@
       document.body.classList.add("no-scroll");
     });
     $("#cartClose").addEventListener("click", closeAll);
+    $("#couponApply").addEventListener("click", applyCoupon);
+    $("#couponInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyCoupon();
+      }
+    });
     $("#checkoutBtn").addEventListener("click", async () => {
       if (!state.cart.length) {
         toast(t("toast.emptyCart"));
@@ -1049,17 +1146,23 @@
         const res = await fetch("/api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customer: email.split("@")[0], email: email.trim(), items, total })
+          body: JSON.stringify({
+            customer: email.split("@")[0],
+            email: email.trim(),
+            items,
+            discountCode: state.coupon ? state.coupon.code : undefined
+          })
         });
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || "error");
         state.cart = [];
+        state.coupon = null;
         saveCart();
         updateCartUI();
         closeAll();
-        openPayment(data.ref, total);
+        openPayment(data.ref, data.total);
       } catch (e) {
-        toast(t("toast.orderFail"), "err");
+        toast(e.message || t("toast.orderFail"), "err");
       } finally {
         btn.textContent = original;
         btn.disabled = false;

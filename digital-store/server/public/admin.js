@@ -56,6 +56,7 @@ const VIEW_TITLES = {
   orders: "سفارش‌ها",
   gateways: "درگاه پرداخت",
   vpn: "اتصال پنل VPN",
+  discounts: "کدهای تخفیف",
   settings: "تنظیمات"
 };
 
@@ -135,6 +136,7 @@ async function go(view) {
     if (view === "orders") await renderOrders();
     if (view === "gateways") await renderGateways();
     if (view === "vpn") await renderVpn();
+    if (view === "discounts") await renderDiscounts();
     if (view === "settings") await renderSettings();
   } catch (err) {
     content.innerHTML = `<div class="empty"><div class="e-ico">⚠️</div><p>${esc(err.message)}</p></div>`;
@@ -1283,6 +1285,223 @@ async function renderVpn() {
       btn.textContent = "💾 ذخیره تنظیمات";
     }
   });
+}
+
+/* ============================================================
+   DISCOUNT CODES
+   ============================================================ */
+const DISCOUNT_EMPTY = {
+  code: "", percent: "", fixedAmount: "", maxDiscountAmount: "",
+  maxUses: "", expiresAt: "", minPurchase: "", maxPurchase: "", note: ""
+};
+let editingDiscountId = null;
+
+function discountValueLabel(d) {
+  if (d.percent) return `${faNum(d.percent)}٪`;
+  if (d.fixedAmount) return `${faNum(d.fixedAmount)} تومان`;
+  return "—";
+}
+
+function discountUsesLabel(d) {
+  if (!d.maxUses) return `${faNum(d.usedCount)} / ∞`;
+  return `${faNum(d.usedCount)} / ${faNum(d.maxUses)}`;
+}
+
+function discountExpiryLabel(d) {
+  if (!d.expiresAt) return "بدون انقضا";
+  const expired = new Date().toISOString() > d.expiresAt;
+  const txt = new Date(d.expiresAt).toLocaleDateString("fa-IR");
+  return expired ? `<span style="color:var(--danger)">${txt} (منقضی)</span>` : txt;
+}
+
+async function renderDiscounts() {
+  const list = await api("/api/admin/discounts");
+  const f = editingDiscountId === "new" ? { ...DISCOUNT_EMPTY } : null;
+
+  $("#content").innerHTML = `
+    ${f ? `
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>➕ ساخت کد تخفیف جدید</h3>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="dcCancel">انصراف</button>
+      </div>
+      <div class="card-grid" style="margin-top:14px">
+        <div class="field">
+          <label>کد تخفیف *</label>
+          <input class="search-box" id="dcCode" dir="ltr" placeholder="SUMMER50" value="${esc(f.code)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>درصد تخفیف (٪)</label>
+          <input class="search-box" id="dcPercent" dir="ltr" inputmode="numeric" placeholder="مثلاً ۲۰" value="${esc(f.percent)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>یا مبلغ ثابت (تومان)</label>
+          <input class="search-box" id="dcFixed" dir="ltr" inputmode="numeric" placeholder="مثلاً ۵۰۰۰۰" value="${esc(f.fixedAmount)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>سقف تخفیف (تومان)</label>
+          <input class="search-box" id="dcMaxAmount" dir="ltr" inputmode="numeric" placeholder="فقط برای درصدی" value="${esc(f.maxDiscountAmount)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>حداکثر تعداد استفاده</label>
+          <input class="search-box" id="dcMaxUses" dir="ltr" inputmode="numeric" placeholder="۰ = نامحدود" value="${esc(f.maxUses)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>تاریخ انقضا</label>
+          <input class="search-box" id="dcExpires" dir="ltr" type="date" value="${esc(f.expiresAt)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>حداقل مبلغ خرید (تومان)</label>
+          <input class="search-box" id="dcMin" dir="ltr" inputmode="numeric" placeholder="اختیاری" value="${esc(f.minPurchase)}" style="width:100%" />
+        </div>
+        <div class="field">
+          <label>حداکثر مبلغ خرید (تومان)</label>
+          <input class="search-box" id="dcMax" dir="ltr" inputmode="numeric" placeholder="اختیاری" value="${esc(f.maxPurchase)}" style="width:100%" />
+        </div>
+      </div>
+      <div class="set-item" style="margin-top:12px">
+        <div class="s-label"><b>یادداشت (اختیاری)</b><span>فقط برای شما نمایش داده می‌شود</span></div>
+        <input class="search-box" id="dcNote" placeholder="مثلاً: کمپین نوروزی" value="${esc(f.note)}" style="width:100%;max-width:340px" />
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn-primary" id="dcSave">💾 ذخیره کد تخفیف</button>
+      </div>
+    </div>` : `
+    <div class="settings-card" style="margin-bottom:16px">
+      <div class="table-head" style="padding:0 0 14px;border-bottom:1px solid var(--line)">
+        <h3>🎟 کدهای تخفیف (${faNum(list.length)})</h3>
+        <div class="spacer"></div>
+        <button class="btn btn-primary btn-sm" id="dcNew">➕ ساخت کد جدید</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:12px 0 0">
+        مشتریان می‌توانند کد را در سبد خرید وارد کنند. درصد تخفیف اولویت دارد و تخفیف هرگز از مبلغ خرید بیشتر نمی‌شود.
+      </p>
+    </div>`}
+
+    <div class="table-card">
+      <div class="table-scroll">
+        ${list.length ? `<table>
+          <thead>
+            <tr>
+              <th>کد</th><th>مقدار تخفیف</th><th>استفاده</th><th>انقضا</th>
+              <th>قوانین</th><th>وضعیت</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map((d) => `<tr>
+              <td>
+                <b dir="ltr" style="font-variant-numeric:tabular-nums">${esc(d.code)}</b>
+                ${d.note ? `<div class="p-sub">${esc(d.note)}</div>` : ""}
+              </td>
+              <td class="num"><b>${discountValueLabel(d)}</b></td>
+              <td class="num">${discountUsesLabel(d)}</td>
+              <td style="white-space:nowrap">${discountExpiryLabel(d)}</td>
+              <td style="font-size:12.5px;color:var(--muted)">
+                ${d.minPurchase ? `<div>حداقل خرید: ${faNum(d.minPurchase)} ت</div>` : ""}
+                ${d.maxPurchase ? `<div>حداکثر خرید: ${faNum(d.maxPurchase)} ت</div>` : ""}
+                ${d.maxDiscountAmount ? `<div>سقف تخفیف: ${faNum(d.maxDiscountAmount)} ت</div>` : ""}
+                ${!d.minPurchase && !d.maxPurchase && !d.maxDiscountAmount ? "—" : ""}
+              </td>
+              <td>
+                <label class="switch">
+                  <input type="checkbox" data-dtoggle="${d.id}" ${d.isActive ? "checked" : ""} />
+                  <span class="slider"></span>
+                </label>
+              </td>
+              <td>
+                <div class="row-actions">
+                  <button class="icon-btn" data-dedit="${d.id}" title="ویرایش">✏️</button>
+                  <button class="icon-btn danger" data-ddel="${d.id}" title="حذف">🗑</button>
+                </div>
+              </td>
+            </tr>`).join("")}
+          </tbody>
+        </table>`
+        : `<div class="empty"><div class="e-ico">🎟</div><p>هنوز کد تخفیفی ساخته نشده است. روی «ساخت کد جدید» بزنید.</p></div>`}
+      </div>
+    </div>`;
+
+  const newBtn = $("#dcNew");
+  if (newBtn) newBtn.addEventListener("click", () => { editingDiscountId = "new"; renderDiscounts(); });
+
+  const cancelBtn = $("#dcCancel");
+  if (cancelBtn) cancelBtn.addEventListener("click", () => { editingDiscountId = null; renderDiscounts(); });
+
+  const saveBtn = $("#dcSave");
+  if (saveBtn)
+    saveBtn.addEventListener("click", async () => {
+      const fields = {
+        code: $("#dcCode").value,
+        percent: $("#dcPercent").value,
+        fixedAmount: $("#dcFixed").value,
+        maxDiscountAmount: $("#dcMaxAmount").value,
+        maxUses: $("#dcMaxUses").value,
+        expiresAt: $("#dcExpires").value || null,
+        minPurchase: $("#dcMin").value,
+        maxPurchase: $("#dcMax").value,
+        note: $("#dcNote").value
+      };
+      if (!fields.code.trim()) return toast("کد تخفیف را وارد کنید", true);
+      if (!fields.percent && !fields.fixedAmount)
+        return toast("درصد یا مبلغ ثابت تخفیف را وارد کنید", true);
+
+      const btn = saveBtn;
+      btn.textContent = "در حال ذخیره…";
+      btn.disabled = true;
+      try {
+        await api("/api/admin/discounts", { method: "POST", body: fields });
+        editingDiscountId = null;
+        toast("کد تخفیف ساخته شد ✓");
+        renderDiscounts();
+      } catch (err) {
+        toast(err.message, true);
+        btn.textContent = "💾 ذخیره کد تخفیف";
+        btn.disabled = false;
+      }
+    });
+
+  $$("[data-dtoggle]").forEach((sw) =>
+    sw.addEventListener("change", async () => {
+      try {
+        await api(`/api/admin/discounts/${sw.dataset.dtoggle}/toggle`, { method: "PUT" });
+        toast("وضعیت کد تغییر کرد ✓");
+        renderDiscounts();
+      } catch (err) { toast(err.message, true); renderDiscounts(); }
+    })
+  );
+
+  $$("[data-dedit]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const list2 = await api("/api/admin/discounts");
+      const d = list2.find((x) => String(x.id) === b.dataset.dedit);
+      if (!d) return;
+      editingDiscountId = null;
+      await renderDiscounts();
+      $("#dcNew") && $("#dcNew").click();
+      $("#dcCode").value = d.code;
+      $("#dcPercent").value = d.percent || "";
+      $("#dcFixed").value = d.fixedAmount || "";
+      $("#dcMaxAmount").value = d.maxDiscountAmount || "";
+      $("#dcMaxUses").value = d.maxUses || "";
+      $("#dcExpires").value = (d.expiresAt || "").slice(0, 10);
+      $("#dcMin").value = d.minPurchase || "";
+      $("#dcMax").value = d.maxPurchase || "";
+      $("#dcNote").value = d.note || "";
+      $("#dcCode").focus();
+    })
+  );
+
+  $$("[data-ddel]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      if (!confirm("این کد تخفیف حذف شود؟")) return;
+      try {
+        await api(`/api/admin/discounts/${b.dataset.ddel}`, { method: "DELETE" });
+        toast("کد تخفیف حذف شد");
+        renderDiscounts();
+      } catch (err) { toast(err.message, true); }
+    })
+  );
 }
 
 /* ============================================================

@@ -49,6 +49,16 @@ import {
   recordSyncError,
   vpnSyncLoop
 } from "./src/vpnapi.js";
+import {
+  validateDiscount,
+  redeemDiscount,
+  releaseDiscount,
+  listDiscountCodes,
+  createDiscountCode,
+  updateDiscountCode,
+  toggleDiscountCode,
+  deleteDiscountCode
+} from "./src/discount.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, ".."); // digital-store/
@@ -67,6 +77,21 @@ app.use(express.static(ROOT)); // storefront (index.html, css/, js/)
 /* ============================================================
    PUBLIC API
    ============================================================ */
+
+/* Recompute a cart's subtotal server-side from the product table.
+   Never trust the client's numbers. */
+function subtotalOf(items) {
+  let subtotal = 0;
+  for (const it of items) {
+    const p =
+      String(it.id || "").startsWith("vpn-")
+        ? vpnStoreProducts().find((x) => x.id === it.id)
+        : db.prepare("SELECT * FROM products WHERE id = ?").get(it.id);
+    if (!p) continue;
+    subtotal += Number(p.price) * Math.max(1, Number(it.qty) || 1);
+  }
+  return subtotal;
+}
 
 /* Categories */
 app.get("/api/categories", (req, res) => {
@@ -110,25 +135,52 @@ app.get("/api/products/:id", (req, res) => {
 
 /* Submit order (public) */
 app.post("/api/orders", (req, res) => {
-  const { customer, email, phone, items, total } = req.body || {};
+  const { customer, email, phone, items, discountCode } = req.body || {};
   if (!customer || !email || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "Invalid order data" });
   }
+
+  /* Recompute the price server-side — the client total is ignored. */
+  const subtotal = subtotalOf(items);
+  if (!subtotal)
+    return res.status(400).json({ error: "محصولات سبد نامعتبر است" });
+
+  let discountAmount = 0;
+  let appliedCode = null;
+  if (discountCode) {
+    const r = redeemDiscount(discountCode, subtotal);
+    if (!r.ok) return res.status(400).json({ error: r.reason });
+    discountAmount = r.amount;
+    appliedCode = r.code;
+  }
+  const total = Math.max(subtotal - discountAmount, 0);
+
   const ref = "DS-" + Date.now().toString(36).toUpperCase();
   db.prepare(
-    `INSERT INTO orders (ref, customer, email, phone, total, status, items)
-     VALUES (?,?,?,?,?, 'pending', ?)`
-  ).run(ref, customer, email, phone || null, Number(total) || 0, JSON.stringify(items));
+    `INSERT INTO orders (ref, customer, email, phone, total, status, items,
+                         subtotal, discount_code, discount_amount)
+     VALUES (?,?,?,?,?, 'pending', ?,?,?,?)`
+  ).run(
+    ref,
+    customer,
+    email,
+    phone || null,
+    total,
+    JSON.stringify(items),
+    subtotal,
+    appliedCode,
+    discountAmount
+  );
 
   /* Telegram notification (best-effort, never blocks the order) */
   if (telegramConfigured()) {
     notifyNewOrder(
-      { ref, customer, email, phone, total, items },
+      { ref, customer, email, phone, total, items, discountCode: appliedCode, discountAmount },
       availableMethods().includes("zarinpal") ? "آنلاین (زرین‌پال)" : "کارت به کارت"
     ).catch(() => {});
   }
 
-  res.json({ ok: true, ref });
+  res.json({ ok: true, ref, total, subtotal, discountAmount, discountCode: appliedCode });
 });
 
 /* ============================================================
@@ -140,7 +192,16 @@ app.get("/api/payment/methods", (req, res) => {
   res.json(getPublicGatewayConfig());
 });
 
-/* Start payment for an order */
+/* Preview a discount code against a cart (public, does NOT consume it) */
+app.post("/api/discount/preview", (req, res) => {
+  const { code, items } = req.body || {};
+  if (!code) return res.status(400).json({ ok: false, error: "کد تخفیف را وارد کنید" });
+
+  const subtotal = Array.isArray(items) && items.length ? subtotalOf(items) : null;
+  const r = validateDiscount(code, subtotal === null ? undefined : subtotal);
+  if (!r.ok) return res.status(400).json({ ok: false, error: r.reason });
+  res.json({ ok: true, amount: r.amount, code: r.code });
+});
 app.post("/api/payment/start", async (req, res) => {
   const { ref, method } = req.body || {};
   if (!ref) return res.status(400).json({ error: "کد پیگیری الزامی است" });
@@ -611,10 +672,18 @@ app.put("/api/admin/orders/:id/status", requireAuth, (req, res) => {
 
   const info = db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, Number(req.params.id));
   if (info.changes === 0) return res.status(404).json({ error: "سفارش پیدا نشد" });
+
+  /* Give the discount use back to the customer when the order is cancelled. */
+  if (status === "cancelled") {
+    const o = db.prepare("SELECT discount_code FROM orders WHERE id = ?").get(Number(req.params.id));
+    if (o && o.discount_code) releaseDiscount(o.discount_code);
+  }
   res.json({ ok: true });
 });
 
 app.delete("/api/admin/orders/:id", requireAuth, (req, res) => {
+  const o = db.prepare("SELECT discount_code FROM orders WHERE id = ?").get(Number(req.params.id));
+  if (o && o.discount_code) releaseDiscount(o.discount_code);
   db.prepare("DELETE FROM orders WHERE id = ?").run(Number(req.params.id));
   res.json({ ok: true });
 });
@@ -817,6 +886,42 @@ app.get("/api/admin/stats", requireAuth, (req, res) => {
     .all();
 
   res.json({ products, active, orders, revenue, pending, byCat });
+});
+
+/* ============================================================
+   ADMIN — DISCOUNT CODES
+   ============================================================ */
+app.get("/api/admin/discounts", requireAuth, (req, res) => {
+  res.json(listDiscountCodes());
+});
+
+app.post("/api/admin/discounts", requireAuth, (req, res) => {
+  try {
+    res.json(createDiscountCode(req.body || {}));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.put("/api/admin/discounts/:id", requireAuth, (req, res) => {
+  try {
+    res.json(updateDiscountCode(req.params.id, req.body || {}));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.put("/api/admin/discounts/:id/toggle", requireAuth, (req, res) => {
+  try {
+    res.json(toggleDiscountCode(req.params.id));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/admin/discounts/:id", requireAuth, (req, res) => {
+  deleteDiscountCode(req.params.id);
+  res.json({ ok: true });
 });
 
 /* ---------- Admin panel (static) ---------- */

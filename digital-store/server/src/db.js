@@ -124,13 +124,36 @@ CREATE TABLE IF NOT EXISTS vpn_products (
   is_auto_provision  INTEGER NOT NULL DEFAULT 0,
   updated_at         DATETIME
 );
+
+/* ---------- Discount codes ----------
+   Mirrors the ShopVPN bot model: percent takes precedence over
+   fixed_amount; max_discount_amount caps only the percent case;
+   max_uses = 0 means unlimited. */
+CREATE TABLE IF NOT EXISTS discount_codes (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  code                TEXT NOT NULL UNIQUE,
+  percent             INTEGER,
+  fixed_amount        INTEGER,
+  max_discount_amount INTEGER,
+  max_uses            INTEGER NOT NULL DEFAULT 0,
+  used_count          INTEGER NOT NULL DEFAULT 0,
+  expires_at          TEXT,
+  min_purchase        INTEGER,
+  max_purchase        INTEGER,
+  is_active           INTEGER NOT NULL DEFAULT 1,
+  note                TEXT,
+  created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `);
 
 /* ---------- Migrations for existing databases ----------
    SQLite cannot add columns inside CREATE TABLE IF NOT EXISTS, so we
    add them explicitly and ignore the error when they already exist. */
 const migrations = [
-  "ALTER TABLE orders ADD COLUMN delivered_at DATETIME"
+  "ALTER TABLE orders ADD COLUMN delivered_at DATETIME",
+  "ALTER TABLE orders ADD COLUMN discount_code TEXT",
+  "ALTER TABLE orders ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN subtotal INTEGER NOT NULL DEFAULT 0"
 ];
 for (const sql of migrations) {
   try {

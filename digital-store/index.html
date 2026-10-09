@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="css/style.css?v=10" />
+  <link rel="stylesheet" href="css/style.css?v=11" />
 </head>
 <body>
 
@@ -405,9 +405,22 @@
     </div>
     <div class="drawer__body" id="cartItems"></div>
     <div class="drawer__foot" id="cartFoot">
+      <div class="cart-coupon" id="couponBox">
+        <input type="text" id="couponInput" class="coupon-input" placeholder="کد تخفیف" data-i18n-placeholder="cart.couponPlaceholder" autocomplete="off" dir="ltr" />
+        <button class="btn btn--ghost coupon-btn" id="couponApply" data-i18n="cart.apply">اعمال</button>
+      </div>
+      <div class="cart-coupon-msg" id="couponMsg"></div>
       <div class="cart-total">
         <span data-i18n="cart.total">مجموع</span>
         <b id="cartTotal">۰ تومان</b>
+      </div>
+      <div class="cart-discount" id="cartDiscountRow" style="display:none">
+        <span data-i18n="cart.discount">تخفیف</span>
+        <b id="cartDiscount">۰ تومان</b>
+      </div>
+      <div class="cart-payable" id="cartPayableRow" style="display:none">
+        <span data-i18n="cart.payable">مبلغ قابل پرداخت</span>
+        <b id="cartPayable">۰ تومان</b>
       </div>
       <button class="btn btn--primary btn--block" id="checkoutBtn" data-i18n="cart.checkout">تسویه حساب</button>
       <p class="cart-note" data-i18n="cart.note">پرداخت امن و تحویل آنی پس از خرید.</p>
@@ -455,6 +468,6 @@
 
   <script src="js/data.js"></script>
   <script src="js/i18n.js"></script>
-  <script src="js/main.js?v=10"></script>
+  <script src="js/main.js?v=11"></script>
 </body>
 </html>
