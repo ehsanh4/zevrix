@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="css/style.css?v=9" />
+  <link rel="stylesheet" href="css/style.css?v=10" />
 </head>
 <body>
 
@@ -138,6 +138,7 @@
   </section>
 
   <!-- ===================== BRAND STRIP ===================== -->
+  <main id="mainContent">
   <section class="brands">
     <div class="container">
       <p data-i18n="brands.title">مورد اعتماد برندهای برتر</p>
@@ -316,6 +317,10 @@
       </div>
     </div>
   </section>
+  </main>
+
+  <!-- ===================== VPN PLANS PAGE ===================== -->
+  <main class="vpn-page" id="vpnPage" hidden></main>
 
   <!-- ===================== FOOTER ===================== -->
   <footer class="footer">
@@ -346,7 +351,7 @@
           <h4 data-i18n="footer.products">محصولات</h4>
           <ul>
             <li><a href="#products" data-i18n="footer.p1">لایسنس نرم‌افزار</a></li>
-            <li><a href="#products" data-i18n="footer.p2">سرویس VPN</a></li>
+            <li><a href="#/vpn" data-go-vpn data-i18n="footer.p2">سرویس VPN</a></li>
             <li><a href="#products" data-i18n="footer.p3">ابزارهای هوش مصنوعی</a></li>
             <li><a href="#products" data-i18n="footer.p4">اشتراک‌های دیجیتال</a></li>
             <li><a href="#products" data-i18n="footer.p5">بازی و سرگرمی</a></li>
@@ -357,7 +362,7 @@
           <h4 data-i18n="footer.categories">دسته‌بندی‌ها</h4>
           <ul>
             <li><a href="#categories" data-i18n="cat.software">لایسنس نرم‌افزار</a></li>
-            <li><a href="#categories" data-i18n="cat.vpn">VPN و سرویس‌های آنلاین</a></li>
+            <li><a href="#/vpn" data-go-vpn data-i18n="cat.vpn">VPN و سرویس‌های آنلاین</a></li>
             <li><a href="#categories" data-i18n="cat.ai">ابزارهای هوش مصنوعی</a></li>
             <li><a href="#categories" data-i18n="cat.security">ابزارهای امنیتی</a></li>
             <li><a href="#categories" data-i18n="cat.files">قالب و فایل‌های دیجیتال</a></li>
@@ -437,6 +442,9 @@
     <div class="modal__box" id="modalBox"></div>
   </div>
 
+  <!-- ===================== VPN PLANS PAGE ===================== -->
+  <main class="vpn-page" id="vpnPage" hidden></main>
+
   <!-- ===================== TOAST ===================== -->
   <div class="toasts" id="toasts"></div>
 
@@ -447,6 +455,6 @@
 
   <script src="js/data.js"></script>
   <script src="js/i18n.js"></script>
-  <script src="js/main.js?v=9"></script>
+  <script src="js/main.js?v=10"></script>
 </body>
 </html>

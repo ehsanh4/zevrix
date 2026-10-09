@@ -23,12 +23,25 @@ const I18N = {
     brands: { title: "مورد اعتماد برندهای برتر" },
     categories: { tag: "دسته‌بندی‌ها", title: "دسته‌بندی محصولات", sub: "هرچه نیاز دیجیتال دارید، در دسته‌بندی‌های ما پیدا کنید.", count: "محصول" },
     cat: {
-      software: "لایسنس نرم‌افزار", vpn: "VPN و سرویس‌های آنلاین", ai: "ابزارهای هوش مصنوعی",
+      software: "لایسنس نرم‌افزار", vpn: "سرویس‌های آنلاین", ai: "ابزارهای هوش مصنوعی",
       sub: "اشتراک‌های دیجیتال", games: "بازی و سرگرمی دیجیتال", files: "قالب و فایل‌های دیجیتال",
       security: "ابزارهای امنیتی", productivity: "ابزارهای بهره‌وری"
     },
     products: { tag: "محصولات منتخب", title: "محصولات پیشنهادی", sub: "پرفروش‌ترین و جدیدترین محصولات دیجیتال را کشف کنید.", empty: "محصولی یافت نشد.", more: "نمایش محصولات بیشتر", less: "نمایش کمتر" },
     filters: { all: "همه" },
+    vpnPage: {
+      badge: "اتصال امن و نامحدود",
+      title: "پلن‌های VPN",
+      sub: "اشتراک‌های VPN با تحویل آنی — بلافاصله پس از پرداخت فعال می‌شوند.",
+      back: "بازگشت به فروشگاه",
+      buy: "خرید پلن",
+      instant: "تحویل آنی",
+      duration: "مدت اعتبار",
+      category: "دسته",
+      empty: "در حال حاضر پلنی موجود نیست",
+      emptyHint: "به‌زودی پلن‌های جدید اضافه خواهد شد. بعداً سر بزنید.",
+      autoProvision: "فعال‌سازی خودکار"
+    },
     card: { buy: "خرید فوری", details: "مشاهده جزئیات", off: "تخفیف", digital: "تحویل آنی دیجیتال", sold: "فروخته‌شده" },
     best: { tag: "پرفروش‌ترین‌ها", title: "محبوب‌ترین محصولات", sub: "انتخاب اول کاربران ما در ماه گذشته." },
     deals: {
@@ -78,12 +91,25 @@ const I18N = {
     brands: { title: "Trusted by top brands" },
     categories: { tag: "Categories", title: "Product Categories", sub: "Find everything you need in our digital categories.", count: "products" },
     cat: {
-      software: "Software Licenses", vpn: "VPN & Online Services", ai: "AI Tools",
+      software: "Software Licenses", vpn: "Online Services", ai: "AI Tools",
       sub: "Digital Subscriptions", games: "Games & Digital Entertainment", files: "Templates & Digital Files",
       security: "Security Tools", productivity: "Productivity Tools"
     },
     products: { tag: "Featured", title: "Featured Products", sub: "Discover the best-selling and latest digital products.", empty: "No products found.", more: "Load More Products", less: "Show Less" },
     filters: { all: "All" },
+    vpnPage: {
+      badge: "Secure & Unlimited",
+      title: "VPN Plans",
+      sub: "VPN subscriptions with instant delivery — activated immediately after payment.",
+      back: "Back to store",
+      buy: "Buy Plan",
+      instant: "Instant Delivery",
+      duration: "Duration",
+      category: "Category",
+      empty: "No plans available right now",
+      emptyHint: "New plans will be added soon. Check back later.",
+      autoProvision: "Auto-provisioning"
+    },
     card: { buy: "Buy Now", details: "View Details", off: "OFF", digital: "Instant Digital Delivery", sold: "sold" },
     best: { tag: "Best Sellers", title: "Most Popular Products", sub: "Our users' top picks in the past month." },
     deals: {

@@ -10,7 +10,8 @@
     cart: JSON.parse(localStorage.getItem("ds-cart") || "[]"),
     filter: "all",
     visible: 8,
-    authMode: "login"
+    authMode: "login",
+    route: "home"
   };
 
   const $ = (s, r) => (r || document).querySelector(s);
@@ -85,6 +86,11 @@
     $$("#categoriesGrid .cat-card").forEach((btn) => {
       btn.addEventListener("click", () => {
         const cat = btn.dataset.cat;
+        /* VPN category has its own dedicated plans page (hash-routed) */
+        if (cat === "vpn") {
+          location.hash = "#/vpn";
+          return;
+        }
         state.filter = cat;
         state.visible = 8;
         renderProducts();
@@ -109,6 +115,11 @@
       .join("");
     $$("#filters .filter").forEach((b) =>
       b.addEventListener("click", () => {
+        /* VPN filter opens the dedicated plans page (hash-routed) */
+        if (b.dataset.filter === "vpn") {
+          location.hash = "#/vpn";
+          return;
+        }
         state.filter = b.dataset.filter;
         state.visible = 8;
         renderProducts();
@@ -814,7 +825,99 @@
     renderFaq();
     updateCartUI();
     setAuthMode(state.authMode);
+    if (state.route === "vpn") renderVpnPage();
     observeReveals();
+  }
+
+  /* ---------- VPN plans page ---------- */
+  function vpnPlans() {
+    return PRODUCTS.filter((p) => p.isVpn);
+  }
+
+  function renderVpnPage() {
+    const wrap = $("#vpnPage");
+    if (!wrap) return;
+    const plans = vpnPlans();
+
+    wrap.innerHTML = `
+      <div class="container">
+        <button class="vpn-back" id="vpnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          <span>${t("vpnPage.back")}</span>
+        </button>
+        <div class="vpn-page__head">
+          <span class="vpn-page__badge">🌐 ${t("vpnPage.badge")}</span>
+          <h1 class="vpn-page__title">${t("vpnPage.title")}</h1>
+          <p class="vpn-page__sub">${t("vpnPage.sub")}</p>
+        </div>
+        ${
+          plans.length
+            ? `<div class="vpn-plans">${plans.map(vpnPlanCard).join("")}</div>`
+            : `<div class="vpn-empty">
+                 <div class="vpn-empty__icon">🌐</div>
+                 <h3>${t("vpnPage.empty")}</h3>
+                 <p>${t("vpnPage.emptyHint")}</p>
+               </div>`
+        }
+      </div>`;
+
+    const back = $("#vpnBack");
+    if (back) back.addEventListener("click", () => go("home"));
+    bindProductEvents(wrap);
+  }
+
+  function vpnPlanCard(p, i) {
+    const specs = (p.specs && p.specs[state.lang]) || [];
+    return `
+    <article class="vpn-plan reveal" data-id="${p.id}" style="animation-delay:${Math.min(i * 50, 350)}ms">
+      <div class="vpn-plan__top">
+        <span class="vpn-plan__icon">${p.icon || "🌐"}</span>
+        <h3 class="vpn-plan__name">${esc(p.name[state.lang])}</h3>
+        <span class="vpn-plan__tag">${t("vpnPage.instant")}</span>
+      </div>
+      ${p.desc && p.desc[state.lang] ? `<p class="vpn-plan__cat">${esc(p.desc[state.lang])}</p>` : ""}
+      <div class="vpn-plan__price">
+        <b>${formatPrice(p.price, state.lang)}</b>
+      </div>
+      <div class="vpn-plan__specs">
+        ${specs.map((s) => `<div class="vpn-plan__spec">${CHECK}<span>${esc(s)}</span></div>`).join("")}
+      </div>
+      <div class="vpn-plan__foot">
+        <button class="btn btn--primary" data-add="${p.id}">${CART_ICON}<span>${t("vpnPage.buy")}</span></button>
+        <button class="btn btn--ghost btn--block" data-view="${p.id}" style="margin-top:8px">${t("card.details")}</button>
+      </div>
+    </article>`;
+  }
+
+  /* ---------- Simple client-side router (home / vpn) ---------- */
+  function go(route, opts) {
+    state.route = route;
+    const home = $("#mainContent");
+    const vpn = $("#vpnPage");
+    if (!home || !vpn) return;
+
+    if (route === "vpn") {
+      home.hidden = true;
+      vpn.hidden = false;
+      renderVpnPage();
+    } else {
+      vpn.hidden = true;
+      home.hidden = false;
+    }
+    /* keep the address bar in sync (silent — no extra history entry) */
+    const want = route === "vpn" ? "#/vpn" : "";
+    if ((location.hash || "") !== want) {
+      history.replaceState(null, "", (want ? want : location.pathname + location.search));
+    }
+    if (!(opts && opts.keepScroll)) window.scrollTo({ top: 0, behavior: "auto" });
+    onScroll();
+    observeReveals();
+  }
+
+  function syncRoute() {
+    const hash = location.hash || "";
+    if (hash.startsWith("#/vpn")) go("vpn");
+    else if (state.route === "vpn") go("home");
   }
 
   /* ---------- Load data from backend (falls back to static data.js) ---------- */
@@ -1019,6 +1122,16 @@
 
     // Year
     $("#year").textContent = new Date().getFullYear();
+
+    // VPN plans page: deep links (#/vpn) + footer/nav links
+    $$("[data-go-vpn]").forEach((b) =>
+      b.addEventListener("click", () => {
+        closeSearch();
+        closeAll();
+      })
+    );
+    window.addEventListener("hashchange", syncRoute);
+    syncRoute();
 
     // A.R.I.A cinematic hero
     initAria();
